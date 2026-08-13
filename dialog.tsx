@@ -14,7 +14,7 @@
 
 import { createMemo, createEffect } from "solid-js"
 import { useTerminalDimensions } from "@opentui/solid"
-import type { DialogDesired, DialogSize } from "./dialog-fit"
+import type { DialogDesired, DialogFit, DialogSize } from "./dialog-fit"
 export {
   resolveDialogFit,
   resolveDialogMaxHeight,
@@ -23,25 +23,17 @@ export {
 } from "./dialog-fit"
 export type { DialogDesired, DialogFit, DialogSize } from "./dialog-fit"
 
-export interface DialogSizing {
-  size: () => DialogSize
-  maxHeight: () => number
-}
-
 /**
- * Reactive dialog sizing driven by the terminal dimensions. Recomputes on
- * terminal resize — pair with a `createEffect` calling
- * `api.ui.dialog.setSize(size)` to keep the dialog in sync.
+ * Reactive dialog sizing driven by the terminal dimensions. Returns an
+ * accessor function (Solid memo style): `sizing()` → `{ size, maxHeight }`.
+ * Recomputes on terminal resize — pair with a `createEffect` calling
+ * `api.ui.dialog.setSize(sizing().size)` to keep the dialog in sync.
  */
-export function useDialogSizing(desired: DialogDesired = {}): DialogSizing {
+export function useDialogSizing(desired: DialogDesired = {}): () => DialogFit {
   const dimensions = useTerminalDimensions()
-  const fit = createMemo(() =>
+  return createMemo(() =>
     resolveDialogFit({ width: dimensions().width, height: dimensions().height }, desired),
   )
-  return {
-    size: () => fit().size,
-    maxHeight: () => fit().maxHeight,
-  }
 }
 
 // ─── DialogShell ──────────────────────────────────────────────────────────────
