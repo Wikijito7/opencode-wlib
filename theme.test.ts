@@ -54,9 +54,24 @@ describe("resolveThemeColors", () => {
     expect(resolveThemeColors(undefined).fg).toBe("#ffffff")
   })
 
-  it("ignores non-string theme values", () => {
-    const palette = resolveThemeColors({ text: 123 as unknown, muted: null as unknown })
-    expect(palette.fg).toBe("#ffffff")
-    expect(palette.muted).toBe("#888888")
+  it("falls back for junk values but passes RGBA objects through", () => {
+    // Junk (numbers, null, empty strings) → fallback.
+    const junk = resolveThemeColors({ text: 123 as unknown, muted: null as unknown, primary: "" as unknown })
+    expect(junk.fg).toBe("#ffffff")
+    expect(junk.muted).toBe("#888888")
+    expect(junk.primary).toBe("#4f46e5")
+
+    // RGBA-like objects (OpenCode theme colors) → passed through verbatim.
+    const rgba = { r: 0.9, g: 0.4, b: 0.1, a: 1 }
+    const themed = resolveThemeColors({ text: rgba, primary: { r: 0.1, g: 0.8, b: 0.2 }, selectedListItemText: { r: 0, g: 0, b: 0 } })
+    expect(themed.fg).toBe(rgba)
+    expect(themed.primary).toEqual({ r: 0.1, g: 0.8, b: 0.2 })
+    expect(themed.selectedText).toEqual({ r: 0, g: 0, b: 0 })
+  })
+
+  it("lets RGBA objects win over caller fallbacks", () => {
+    const rgba = { r: 1, g: 0, b: 0 }
+    const palette = resolveThemeColors({ primary: rgba }, { primary: "#000000" })
+    expect(palette.primary).toBe(rgba)
   })
 })
