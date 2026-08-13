@@ -37,6 +37,54 @@ Solves the plugin-hook-ordering problem for system-prompt observers. opencode fi
 
 `file` and `opts` (`driftThreshold`, `maxEntries`, `purgeCount`, `tsRefreshMs`, `now`) are injectable for tests.
 
+### `clipboard` — system clipboard writes
+
+Writes text to the system clipboard via native commands (pbcopy / wl-copy / xclip / xsel / powershell.exe) with an OSC 52 escape-sequence fallback (tmux/screen wrapping included) for terminal-only environments.
+
+**API:** `writeClipboard(text)` → `Promise<boolean>`, `resolveClipboardCandidates(platform)` (pure), `buildOsc52Sequence(text)` (pure).
+
+### `scroll` — scrollbox state for dialogs
+
+Solid-agnostic scroll state (`makeScrollState(createSignal)`) tracking overflow/position with up/down/page-up/page-down handlers. This is the canonical full version — plugin-local trimmed copies drift (e.g. missing page up/down).
+
+**API:** `makeScrollState(createSignal)` → `ScrollState` (`scrollRef`, `isScrolled`, `isAtBottom`, `hasOverflow`, `handleUp`, `handleDown`, `handlePageUp`, `handlePageDown`, `checkOverflow`, `scrollToTop`).
+
+### `keys` — dialog key layer
+
+Typed wrapper over `api.keymap.registerLayer` for dialog-scoped key layers (bindings + commands) with a cleanup function.
+
+**API:** `registerDialogKeyLayer(api, { bindings, commands })` → cleanup.
+
+### `theme` — normalized theme palette
+
+OpenCode themes expose colors under different property names across plugin code (`text` vs `foreground`, `textMuted` vs `muted`, `error` vs `red`). This helper normalizes them into one typed palette so dialogs stop drifting.
+
+**API:** `resolveThemeColors(theme, fallbacks?)` → `{ fg, muted, red, primary, selectedText }`.
+
+### `log` — unified debug logging
+
+One logging pattern for every plugin: a `DEBUG` flag (env `OPENCODE_WLIB_DEBUG` or explicit), a per-plugin log file, and a `log()` that no-ops when debugging is off.
+
+**API:** `createLog({ debug?, dir?, fileName? })` → `{ log, debug }`.
+
+### `reload` — stale-fetch guard
+
+Prevents out-of-order async responses from clobbering newer data.
+
+**API:** `createLoadGuard()` → `{ invalidate(), isCurrent(gen) }`.
+
+### `command` — palette slash commands
+
+Every plugin registers the same shape: a `keymap.registerLayer` with a palette command (`category: "Plugin"`, `namespace: "palette"`, `slashName`) plus an optional key binding.
+
+**API:** `registerSlashCommand(api, { name, title, slashName, key?, run })` → cleanup.
+
+### `dialog` — reusable dialog frame
+
+The common dialog skeleton shared by every plugin: title bar with `esc`, scrollable content with `▲ more above` / `▼ more below` indicators, and a footer. Combine with `makeScrollState` + `registerDialogKeyLayer`.
+
+**API:** `<DialogShell title subtitle fg muted scroll footer>{children}</DialogShell>`.
+
 ## Usage as a git submodule
 
 ```bash
@@ -55,11 +103,17 @@ git commit -m "chore: bump opencode-wlib"
 Import from plugins:
 
 ```ts
-// persona-injector-server.ts (server side — writer)
+// persona-injector-server.ts (server side — system snapshot writer)
 import { writeSystemSnapshot, isTitleGenerator } from "./persona-injector/wlib/system"
 
-// model-usage/analyze-domain.ts (TUI side — reader)
+// model-usage/analyze-domain.ts (TUI side — system snapshot reader)
 import { readSystemSnapshot } from "./wlib/system"
+
+// any dialog
+import { makeScrollState } from "./wlib/scroll"
+import { registerDialogKeyLayer } from "./wlib/keys"
+import { resolveThemeColors } from "./wlib/theme"
+import { DialogShell } from "./wlib/dialog"
 ```
 
 ## Development
