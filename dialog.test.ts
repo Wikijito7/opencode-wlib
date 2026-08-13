@@ -92,3 +92,37 @@ describe("resolveDialogFit", () => {
     expect(resolveDialogFit({ width: 200, height: 80 })).toEqual({ size: "large", maxHeight: 40 })
   })
 })
+
+// ─── small-screen guarantee: never cut off ───────────────────────────────────
+
+describe("small-screen fit never cuts content off", () => {
+  // Host layout: content sits at paddingTop = ceil(H / 4) (worst-case
+  // rounding) and grows to maxHeight + chrome rows. The fit must keep the
+  // dialog bottom inside the terminal for every realistic screen height.
+  it("keeps the dialog fully on-screen from 22 rows up", () => {
+    for (let h = 22; h <= 80; h++) {
+      const { maxHeight } = resolveDialogFit({ width: 200, height: h })
+      const bottom = Math.ceil(h / 4) + maxHeight + 8
+      expect(bottom).toBeLessThanOrEqual(h)
+    }
+  })
+
+  it("resolves shrinking fits for typical small screens", () => {
+    expect(resolveDialogFit({ width: 90, height: 25 })).toEqual({ size: "large", maxHeight: 10 })
+    expect(resolveDialogFit({ width: 90, height: 30 }).maxHeight).toBe(14)
+    expect(resolveDialogFit({ width: 90, height: 38 }).maxHeight).toBe(20)
+    expect(resolveDialogFit({ width: 90, height: 45 }).maxHeight).toBe(25)
+  })
+
+  it("hits the exact-fit boundary on key terminal heights", () => {
+    expect(resolveDialogFit({ width: 90, height: 24 }).maxHeight).toBe(10) // 6 + 10 + 8 = 24
+    expect(resolveDialogFit({ width: 90, height: 60 }).maxHeight).toBe(37) // 15 + 37 + 8 = 60
+    expect(resolveDialogFit({ width: 90, height: 64 }).maxHeight).toBe(40) // 16 + 40 + 8 = 64
+  })
+
+  it("only overflows below 22 rows, at the 8-row visibility floor", () => {
+    expect(resolveDialogMaxHeight(21)).toBe(8)
+    expect(resolveDialogMaxHeight(20)).toBe(8)
+    expect(resolveDialogMaxHeight(15)).toBe(8)
+  })
+})

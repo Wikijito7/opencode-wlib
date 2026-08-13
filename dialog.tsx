@@ -19,6 +19,10 @@ import type { TuiPluginApi } from "@opencode-ai/plugin/tui"
 import { resolveDialogFit } from "./dialog-fit"
 import type { DialogDesired, DialogFit, DialogSize } from "./dialog-fit"
 import type { ThemeColorValue } from "./theme"
+import { createLog } from "./log"
+
+// Debug logging for dialog sizing — gated by the OPENCODE_WLIB_DEBUG env var.
+const dlog = createLog({ fileName: "log_wlib_dialog_sizing.log" }).log
 
 /**
  * Reactive dialog sizing driven by the terminal dimensions via the plugin
@@ -33,19 +37,50 @@ import type { ThemeColorValue } from "./theme"
  */
 export function useDialogSizing(api: TuiPluginApi, desired: DialogDesired = {}): () => DialogFit {
   const renderer = api.renderer
+
+  // Log 1 — initial read at hook creation (before signals are seeded)
+  dlog(
+    `[wlib:dialog] init renderer=${renderer ? "present" : "missing"} ` +
+      `desired=${JSON.stringify(desired)} ` +
+      `geometry w=${renderer?.width} h=${renderer?.height} ` +
+      `terminal w=${renderer?.terminalWidth} h=${renderer?.terminalHeight} ` +
+      `stdout w=${process.stdout.columns} h=${process.stdout.rows}`,
+  )
+
   const [width, setWidth] = createSignal(renderer?.width ?? 0)
   const [height, setHeight] = createSignal(renderer?.height ?? 0)
 
   const onResize = (w: number, h: number) => {
     setWidth(w)
     setHeight(h)
+
+    // Log 2 — resize event payload vs live re-read
+    dlog(
+      `[wlib:dialog] resize payload w=${w} h=${h} | live ` +
+        `geometry w=${renderer?.width} h=${renderer?.height} ` +
+        `terminal w=${renderer?.terminalWidth} h=${renderer?.terminalHeight}`,
+    )
   }
 
   onMount(() => {
     renderer?.on("resize", onResize)
+
+    // Log 3 — post-mount state (first render result)
+    const fit = resolveDialogFit(
+      {
+        width: width() > 0 ? width() : Number.POSITIVE_INFINITY,
+        height: height() > 0 ? height() : Number.POSITIVE_INFINITY,
+      },
+      desired,
+    )
+    dlog(
+      `[wlib:dialog] mounted signals w=${width()} h=${height()} ` +
+        `=> size=${fit.size} maxHeight=${fit.maxHeight}`,
+    )
   })
   onCleanup(() => {
     renderer?.off("resize", onResize)
+    dlog(`[wlib:dialog] cleanup (dialog closed)`)
   })
 
   return () => {
@@ -106,8 +141,6 @@ export function DialogShell(props: DialogShellProps) {
 
       <scrollbox
         ref={(el) => (props.scroll.scrollRef = el)}
-        flexDirection="column"
-        gap={1}
         maxHeight={sizing().maxHeight}
         scrollbarOptions={{ visible: false }}
       >
