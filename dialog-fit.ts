@@ -24,7 +24,7 @@ export interface DialogDesired {
   size?: DialogSize
   /** Desired scrollbox maxHeight (default 40). */
   maxHeight?: number
-  /** Rows consumed by title bar, indicators, footer and gaps (default 8). */
+  /** Rows consumed by title bar, indicators, footer and gaps (default 11). */
   chrome?: number
 }
 
@@ -34,7 +34,7 @@ export interface DialogFit {
 }
 
 const DEFAULT_MAX_HEIGHT = 40
-const DEFAULT_CHROME = 8
+const DEFAULT_CHROME = 11
 const MIN_MAX_HEIGHT = 8
 // The dialog backdrop clamps its inner box to `terminalWidth - 2`.
 const WIDTH_MARGIN = 2
