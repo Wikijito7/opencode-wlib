@@ -14,51 +14,58 @@
  * `dialog.tsx` for `./wlib/dialog` imports and named exports would break.
  */
 
-import { createEffect } from "solid-js"
-import { useTerminalDimensions } from "@opentui/solid"
+import { createEffect, createSignal, onMount, onCleanup } from "solid-js"
+import type { TuiPluginApi } from "@opencode-ai/plugin/tui"
 import { resolveDialogFit } from "./dialog-fit"
 import type { DialogDesired, DialogFit, DialogSize } from "./dialog-fit"
+import type { ThemeColorValue } from "./theme"
 
 /**
- * Reactive dialog sizing driven by the terminal dimensions. Returns an
- * accessor function: `sizing()` → `{ size, maxHeight }`. Recomputes on
- * terminal resize (the dimensions accessor is a reactive signal) — pair
- * with a `createEffect` calling `api.ui.dialog.setSize(sizing().size)`.
+ * Reactive dialog sizing driven by the terminal dimensions via the plugin
+ * API's renderer (`api.renderer`) — no context dependency, so it works in
+ * plugin dialogs where `useTerminalDimensions` is unavailable.
  *
- * Defensive by design: the host terminal-dimensions hook is optional. When
- * it is unavailable or throws, the accessor falls back to the DESIRED
- * size/height (the previous fixed-size behaviour) instead of crashing.
+ * Returns an accessor function: `sizing()` → `{ size, maxHeight }`. The
+ * renderer's `resize` event updates internal signals, so reads inside JSX
+ * or a `createEffect` (e.g. `api.ui.dialog.setSize(sizing().size)`) react
+ * to terminal resizes. When the renderer reports no size yet, falls back
+ * to the DESIRED size/height.
  */
-export function useDialogSizing(desired: DialogDesired = {}): () => DialogFit {
-  let getDimensions: (() => { width?: number; height?: number }) | undefined
-  try {
-    const hook = useTerminalDimensions as unknown
-    if (typeof hook === "function") {
-      getDimensions = (hook as () => { width?: number; height?: number })()
-    }
-  } catch {
-    getDimensions = undefined
+export function useDialogSizing(api: TuiPluginApi, desired: DialogDesired = {}): () => DialogFit {
+  const renderer = api.renderer
+  const [width, setWidth] = createSignal(renderer?.width ?? 0)
+  const [height, setHeight] = createSignal(renderer?.height ?? 0)
+
+  const onResize = (w: number, h: number) => {
+    setWidth(w)
+    setHeight(h)
   }
 
+  onMount(() => {
+    renderer?.on("resize", onResize)
+  })
+  onCleanup(() => {
+    renderer?.off("resize", onResize)
+  })
+
   return () => {
-    try {
-      const d = getDimensions?.() ?? {}
-      const width = typeof d.width === "number" && d.width > 0 ? d.width : Number.POSITIVE_INFINITY
-      const height = typeof d.height === "number" && d.height > 0 ? d.height : Number.POSITIVE_INFINITY
-      return resolveDialogFit({ width, height }, desired)
-    } catch {
-      return resolveDialogFit({ width: Number.POSITIVE_INFINITY, height: Number.POSITIVE_INFINITY }, desired)
-    }
+    const w = width() > 0 ? width() : Number.POSITIVE_INFINITY
+    const h = height() > 0 ? height() : Number.POSITIVE_INFINITY
+    return resolveDialogFit({ width: w, height: h }, desired)
   }
 }
 
 // ─── DialogShell ──────────────────────────────────────────────────────────────
 
 export interface DialogShellProps {
+  /** Plugin API — used for terminal dimensions via `api.renderer`. */
+  api: TuiPluginApi
   title: string
   subtitle?: string
-  fg: string
-  muted: string
+  /** Theme color — hex string or OpenCode RGBA object (see `ThemeColorValue`). */
+  fg: ThemeColorValue
+  /** Theme color — hex string or OpenCode RGBA object (see `ThemeColorValue`). */
+  muted: ThemeColorValue
   scroll: {
     scrollRef: any
     isScrolled: () => boolean
@@ -74,7 +81,7 @@ export interface DialogShellProps {
 }
 
 export function DialogShell(props: DialogShellProps) {
-  const sizing = useDialogSizing(props.desired)
+  const sizing = useDialogSizing(props.api, props.desired)
 
   // Keep the host dialog width in sync with the terminal (reactive resize).
   createEffect(() => {
