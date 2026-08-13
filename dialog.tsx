@@ -2,38 +2,54 @@
 /**
  * opencode-wlib — responsive dialog sizing + reusable dialog frame.
  *
- * Single entry point for the `dialog` module: re-exports the pure fit
- * logic (from `dialog-fit.ts`) and provides the reactive `useDialogSizing`
- * hook backed by the host's terminal dimensions, plus the `DialogShell`
- * component. Keep `dialog-fit.ts` as the only pure/testable module —
- * `@opentui/solid` is only resolvable inside the opencode TUI host.
+ * Single entry point for the `dialog` module: provides the reactive
+ * `useDialogSizing` hook backed by the host's terminal dimensions, plus
+ * the `DialogShell` component. The pure fit logic lives in `dialog-fit.ts`
+ * (the only pure/testable module — `@opentui/solid` is only resolvable
+ * inside the opencode TUI host).
  *
- * NOTE: do not add a sibling `dialog.ts` — the host resolver may pick
+ * NOTE: no `export … from "./dialog-fit"` re-exports — the plugin runtime
+ * transpiler drops them and the names end up undefined. Import directly.
+ * Also do not add a sibling `dialog.ts` — the host resolver may pick
  * `dialog.tsx` for `./wlib/dialog` imports and named exports would break.
  */
 
-import { createMemo, createEffect } from "solid-js"
+import { createEffect } from "solid-js"
 import { useTerminalDimensions } from "@opentui/solid"
+import { resolveDialogFit } from "./dialog-fit"
 import type { DialogDesired, DialogFit, DialogSize } from "./dialog-fit"
-export {
-  resolveDialogFit,
-  resolveDialogMaxHeight,
-  resolveDialogSize,
-  DIALOG_WIDTHS,
-} from "./dialog-fit"
-export type { DialogDesired, DialogFit, DialogSize } from "./dialog-fit"
 
 /**
  * Reactive dialog sizing driven by the terminal dimensions. Returns an
- * accessor function (Solid memo style): `sizing()` → `{ size, maxHeight }`.
- * Recomputes on terminal resize — pair with a `createEffect` calling
- * `api.ui.dialog.setSize(sizing().size)` to keep the dialog in sync.
+ * accessor function: `sizing()` → `{ size, maxHeight }`. Recomputes on
+ * terminal resize (the dimensions accessor is a reactive signal) — pair
+ * with a `createEffect` calling `api.ui.dialog.setSize(sizing().size)`.
+ *
+ * Defensive by design: the host terminal-dimensions hook is optional. When
+ * it is unavailable or throws, the accessor falls back to the DESIRED
+ * size/height (the previous fixed-size behaviour) instead of crashing.
  */
 export function useDialogSizing(desired: DialogDesired = {}): () => DialogFit {
-  const dimensions = useTerminalDimensions()
-  return createMemo(() =>
-    resolveDialogFit({ width: dimensions().width, height: dimensions().height }, desired),
-  )
+  let getDimensions: (() => { width?: number; height?: number }) | undefined
+  try {
+    const hook = useTerminalDimensions as unknown
+    if (typeof hook === "function") {
+      getDimensions = (hook as () => { width?: number; height?: number })()
+    }
+  } catch {
+    getDimensions = undefined
+  }
+
+  return () => {
+    try {
+      const d = getDimensions?.() ?? {}
+      const width = typeof d.width === "number" && d.width > 0 ? d.width : Number.POSITIVE_INFINITY
+      const height = typeof d.height === "number" && d.height > 0 ? d.height : Number.POSITIVE_INFINITY
+      return resolveDialogFit({ width, height }, desired)
+    } catch {
+      return resolveDialogFit({ width: Number.POSITIVE_INFINITY, height: Number.POSITIVE_INFINITY }, desired)
+    }
+  }
 }
 
 // ─── DialogShell ──────────────────────────────────────────────────────────────
