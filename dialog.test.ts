@@ -45,24 +45,24 @@ describe("resolveDialogSize", () => {
 
 describe("resolveDialogMaxHeight", () => {
   it("keeps the desired height on tall terminals", () => {
-    expect(resolveDialogMaxHeight(80)).toBe(40) // 0.75*80-11 = 49 → cap at 40
-    expect(resolveDialogMaxHeight(64)).toBe(37) // 0.75*64-11 = 37
+    expect(resolveDialogMaxHeight(80)).toBe(40) // 0.75*80-14 = 46 → cap at 40
+    expect(resolveDialogMaxHeight(64)).toBe(34) // 0.75*64-14 = 34
   })
 
   it("shrinks below the desired height on short terminals", () => {
-    expect(resolveDialogMaxHeight(40)).toBe(19) // 30-11
-    expect(resolveDialogMaxHeight(30)).toBe(11) // 22-11
-    expect(resolveDialogMaxHeight(24)).toBe(8) // 18-11 → floor
+    expect(resolveDialogMaxHeight(40)).toBe(16) // 30-14
+    expect(resolveDialogMaxHeight(30)).toBe(8) // 22-14 → floor
+    expect(resolveDialogMaxHeight(24)).toBe(8) // 18-14 → floor
   })
 
   it("never goes below the 8-row floor", () => {
-    expect(resolveDialogMaxHeight(20)).toBe(8) // 15-11 = 4 → floor
+    expect(resolveDialogMaxHeight(20)).toBe(8) // 15-14 = 1 → floor
     expect(resolveDialogMaxHeight(10)).toBe(8)
   })
 
   it("respects a custom desired height", () => {
     expect(resolveDialogMaxHeight(80, 30)).toBe(30)
-    expect(resolveDialogMaxHeight(40, 30)).toBe(19) // available space wins
+    expect(resolveDialogMaxHeight(40, 30)).toBe(16) // available space wins
   })
 
   it("respects a custom chrome estimate", () => {
@@ -99,28 +99,29 @@ describe("small-screen fit never cuts content off", () => {
   // Host layout: content sits at paddingTop = ceil(H / 4) (worst-case
   // rounding) and grows to maxHeight + chrome rows. The fit must keep the
   // dialog bottom inside the terminal for every realistic screen height.
-  it("keeps the dialog fully on-screen from 26 rows up", () => {
-    for (let h = 26; h <= 80; h++) {
+  it("keeps the dialog fully on-screen from 30 rows up", () => {
+    for (let h = 30; h <= 80; h++) {
       const { maxHeight } = resolveDialogFit({ width: 200, height: h })
-      const bottom = Math.ceil(h / 4) + maxHeight + 11
+      const bottom = Math.ceil(h / 4) + maxHeight + 14
       expect(bottom).toBeLessThanOrEqual(h)
     }
   })
 
   it("resolves shrinking fits for typical small screens", () => {
     expect(resolveDialogFit({ width: 90, height: 25 })).toEqual({ size: "large", maxHeight: 8 })
-    expect(resolveDialogFit({ width: 90, height: 30 }).maxHeight).toBe(11)
-    expect(resolveDialogFit({ width: 90, height: 38 }).maxHeight).toBe(17)
-    expect(resolveDialogFit({ width: 90, height: 45 }).maxHeight).toBe(22)
+    expect(resolveDialogFit({ width: 90, height: 30 }).maxHeight).toBe(8)
+    expect(resolveDialogFit({ width: 90, height: 38 }).maxHeight).toBe(14)
+    expect(resolveDialogFit({ width: 90, height: 45 }).maxHeight).toBe(19)
   })
 
   it("hits the exact-fit boundary on key terminal heights", () => {
-    expect(resolveDialogFit({ width: 90, height: 24 }).maxHeight).toBe(8) // 6 + 8 + 11 = 25 → floor
-    expect(resolveDialogFit({ width: 90, height: 60 }).maxHeight).toBe(34) // 15 + 34 + 11 = 60
-    expect(resolveDialogFit({ width: 90, height: 68 }).maxHeight).toBe(40) // 17 + 40 + 11 = 68
+    expect(resolveDialogFit({ width: 90, height: 24 }).maxHeight).toBe(8) // 6 + 8 + 14 = 28 → floor
+    expect(resolveDialogFit({ width: 90, height: 60 }).maxHeight).toBe(31) // 15 + 31 + 14 = 60
+    expect(resolveDialogFit({ width: 90, height: 72 }).maxHeight).toBe(40) // 18 + 40 + 14 = 72
   })
 
-  it("only overflows below 26 rows, at the 8-row visibility floor", () => {
+  it("only overflows below 30 rows, at the 8-row visibility floor", () => {
+    expect(resolveDialogMaxHeight(29)).toBe(8)
     expect(resolveDialogMaxHeight(25)).toBe(8)
     expect(resolveDialogMaxHeight(21)).toBe(8)
     expect(resolveDialogMaxHeight(20)).toBe(8)
