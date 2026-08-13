@@ -1,19 +1,50 @@
 /** @jsxImportSource @opentui/solid */
 /**
- * opencode-wlib — reusable dialog frame.
+ * opencode-wlib — responsive dialog sizing + reusable dialog frame.
  *
- * The common dialog skeleton shared by every plugin: title bar with
- * `esc`, scrollable content with `▲ more above` / `▼ more below`
- * indicators, and a footer. Responsive by default — the scrollbox height
- * and the dialog width tier follow the terminal size (desired values with
- * graceful fallback), so dialogs never get cut off on small terminals.
+ * Single entry point for the `dialog` module: re-exports the pure fit
+ * logic (from `dialog-fit.ts`) and provides the reactive `useDialogSizing`
+ * hook backed by the host's terminal dimensions, plus the `DialogShell`
+ * component. Keep `dialog-fit.ts` as the only pure/testable module —
+ * `@opentui/solid` is only resolvable inside the opencode TUI host.
  *
- * Pair with `makeScrollState` + `registerDialogKeyLayer`.
+ * NOTE: do not add a sibling `dialog.ts` — the host resolver may pick
+ * `dialog.tsx` for `./wlib/dialog` imports and named exports would break.
  */
 
-import { createEffect } from "solid-js"
-import { useDialogSizing } from "./dialog"
+import { createMemo, createEffect } from "solid-js"
+import { useTerminalDimensions } from "@opentui/solid"
 import type { DialogDesired, DialogSize } from "./dialog-fit"
+export {
+  resolveDialogFit,
+  resolveDialogMaxHeight,
+  resolveDialogSize,
+  DIALOG_WIDTHS,
+} from "./dialog-fit"
+export type { DialogDesired, DialogFit, DialogSize } from "./dialog-fit"
+
+export interface DialogSizing {
+  size: () => DialogSize
+  maxHeight: () => number
+}
+
+/**
+ * Reactive dialog sizing driven by the terminal dimensions. Recomputes on
+ * terminal resize — pair with a `createEffect` calling
+ * `api.ui.dialog.setSize(size)` to keep the dialog in sync.
+ */
+export function useDialogSizing(desired: DialogDesired = {}): DialogSizing {
+  const dimensions = useTerminalDimensions()
+  const fit = createMemo(() =>
+    resolveDialogFit({ width: dimensions().width, height: dimensions().height }, desired),
+  )
+  return {
+    size: () => fit().size,
+    maxHeight: () => fit().maxHeight,
+  }
+}
+
+// ─── DialogShell ──────────────────────────────────────────────────────────────
 
 export interface DialogShellProps {
   title: string
