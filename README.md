@@ -79,11 +79,16 @@ Every plugin registers the same shape: a `keymap.registerLayer` with a palette c
 
 **API:** `registerSlashCommand(api, { name, title, slashName, key?, run })` → cleanup.
 
-### `dialog` — reusable dialog frame
+### `dialog` — responsive dialogs
 
-The common dialog skeleton shared by every plugin: title bar with `esc`, scrollable content with `▲ more above` / `▼ more below` indicators, and a footer. Combine with `makeScrollState` + `registerDialogKeyLayer`.
+Desired size/height with graceful fallback: the dialog picks the largest width tier (`medium` 60 / `large` 88 / `xlarge` 116 — mirroring opencode's widths) and the tallest scrollbox that fit the terminal, shrinking when the terminal is smaller so dialogs are never cut off (mirrors opencode's own `DialogSelect` behaviour).
 
-**API:** `<DialogShell title subtitle fg muted scroll footer>{children}</DialogShell>`.
+**API:**
+- `resolveDialogSize(terminalWidth, desired?)` → largest tier ≤ desired that fits (floor: `medium`)
+- `resolveDialogMaxHeight(terminalHeight, desired?, chrome?)` → `max(8, min(desired, ⌊0.75·H⌋ − chrome))` (chrome = title/indicators/footer rows, default 8)
+- `resolveDialogFit(terminal, desired?)` → `{ size, maxHeight }` (pure — test this; lives in `dialog-fit.ts`)
+- `useDialogSizing(desired?)` → reactive `{ size, maxHeight }` from the host terminal dimensions (host-only import — keep out of unit tests)
+- `<DialogShell title subtitle fg muted scroll footer desired onSizeChange>` → the common dialog frame; applies the responsive sizing automatically (pass `onSizeChange` → `api.ui.dialog.setSize` to keep the host in sync)
 
 ## Usage as a git submodule
 
