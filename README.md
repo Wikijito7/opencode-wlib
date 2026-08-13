@@ -40,8 +40,9 @@ Solves the plugin-hook-ordering problem for system-prompt observers. opencode fi
 ## Usage as a git submodule
 
 ```bash
-# add to a plugin repo
-git submodule add https://github.com/Wikijito7/opencode-wlib <plugin-folder>/shared
+# add to a plugin repo (wlib/ inside the plugin folder — never inside an
+# existing shared/ dir, those hold plugin-local helpers)
+git submodule add https://github.com/Wikijito7/opencode-wlib <plugin-folder>/wlib
 
 # after cloning / pulling a repo that uses it
 git submodule update --init --recursive
@@ -55,10 +56,10 @@ Import from plugins:
 
 ```ts
 // persona-injector-server.ts (server side — writer)
-import { writeSystemSnapshot, isTitleGenerator } from "./persona-injector/shared/system"
+import { writeSystemSnapshot, isTitleGenerator } from "./persona-injector/wlib/system"
 
 // model-usage/analyze-domain.ts (TUI side — reader)
-import { readSystemSnapshot } from "./shared/system"
+import { readSystemSnapshot } from "./wlib/system"
 ```
 
 ## Development
