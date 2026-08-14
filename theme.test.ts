@@ -44,6 +44,22 @@ describe("resolveThemeColors", () => {
     expect(palette.primary).toBe("#ff00ff")
   })
 
+  it("reads background from theme.background", () => {
+    expect(resolveThemeColors({ background: "#0a0a0a" }).background).toBe("#0a0a0a")
+  })
+
+  it("falls back to default background when missing", () => {
+    expect(resolveThemeColors({}).background).toBe("#000000")
+  })
+
+  it("applies caller background fallback before default", () => {
+    expect(resolveThemeColors({}, { background: "#123456" }).background).toBe("#123456")
+  })
+
+  it("keeps the theme background over caller fallback", () => {
+    expect(resolveThemeColors({ background: "#ffffff" }, { background: "#000000" }).background).toBe("#ffffff")
+  })
+
   it("reads selectedListItemText", () => {
     expect(resolveThemeColors({ selectedListItemText: "#123456" }).selectedText).toBe("#123456")
     expect(resolveThemeColors({}).selectedText).toBeUndefined()

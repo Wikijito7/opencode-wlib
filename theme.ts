@@ -24,6 +24,8 @@ export interface ThemePalette {
   primary: ThemeColorValue
   /** Text color used on the selected list item (may be undefined). */
   selectedText: ThemeColorValue | undefined
+  /** Background color of the app/surface. */
+  background: ThemeColorValue
 }
 
 export interface ThemePaletteFallbacks {
@@ -31,6 +33,7 @@ export interface ThemePaletteFallbacks {
   muted?: ThemeColorValue
   red?: ThemeColorValue
   primary?: ThemeColorValue
+  background?: ThemeColorValue
 }
 
 /**
@@ -59,5 +62,6 @@ export function resolveThemeColors(
     red: validColor(theme?.error) ?? validColor(theme?.red) ?? fallbacks.red ?? "#ef4444",
     primary: validColor(theme?.primary) ?? fallbacks.primary ?? "#4f46e5",
     selectedText: validColor(theme?.selectedListItemText),
+    background: validColor(theme?.background) ?? fallbacks.background ?? "#000000",
   }
 }
