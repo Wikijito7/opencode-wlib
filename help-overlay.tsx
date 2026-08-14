@@ -62,6 +62,9 @@ export function HelpOverlay(props: HelpOverlayProps): JSX.Element {
         <text fg={props.muted}>esc</text>
       </box>
 
+      {/* Spacer row between header and shortcut list */}
+      <text> </text>
+
       {/* Rows */}
       {props.rows.map((row) => (
         <box flexDirection="row">
