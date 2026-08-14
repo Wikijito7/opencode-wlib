@@ -60,6 +60,22 @@ describe("resolveThemeColors", () => {
     expect(resolveThemeColors({ background: "#ffffff" }, { background: "#000000" }).background).toBe("#ffffff")
   })
 
+  it("reads panel from theme.backgroundPanel", () => {
+    expect(resolveThemeColors({ backgroundPanel: "#0a0a0a" }).panel).toBe("#0a0a0a")
+  })
+
+  it("falls back to default panel when missing", () => {
+    expect(resolveThemeColors({}).panel).toBe("#000000")
+  })
+
+  it("applies caller panel fallback before default", () => {
+    expect(resolveThemeColors({}, { panel: "#123456" }).panel).toBe("#123456")
+  })
+
+  it("keeps the theme panel over caller fallback", () => {
+    expect(resolveThemeColors({ backgroundPanel: "#ffffff" }, { panel: "#000000" }).panel).toBe("#ffffff")
+  })
+
   it("reads selectedListItemText", () => {
     expect(resolveThemeColors({ selectedListItemText: "#123456" }).selectedText).toBe("#123456")
     expect(resolveThemeColors({}).selectedText).toBeUndefined()

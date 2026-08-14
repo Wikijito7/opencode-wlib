@@ -26,6 +26,8 @@ export interface ThemePalette {
   selectedText: ThemeColorValue | undefined
   /** Background color of the app/surface. */
   background: ThemeColorValue
+  /** Dialog/panel surface background color. */
+  panel: ThemeColorValue
 }
 
 export interface ThemePaletteFallbacks {
@@ -34,6 +36,7 @@ export interface ThemePaletteFallbacks {
   red?: ThemeColorValue
   primary?: ThemeColorValue
   background?: ThemeColorValue
+  panel?: ThemeColorValue
 }
 
 /**
@@ -63,5 +66,6 @@ export function resolveThemeColors(
     primary: validColor(theme?.primary) ?? fallbacks.primary ?? "#4f46e5",
     selectedText: validColor(theme?.selectedListItemText),
     background: validColor(theme?.background) ?? fallbacks.background ?? "#000000",
+    panel: validColor(theme?.backgroundPanel) ?? fallbacks.panel ?? "#000000",
   }
 }

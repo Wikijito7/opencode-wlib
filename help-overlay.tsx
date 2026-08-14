@@ -41,36 +41,26 @@ export function HelpOverlay(props: HelpOverlayProps): JSX.Element {
       zIndex={10}
       width="100%"
       height="100%"
-      flexGrow={1}
       flexDirection="column"
-      alignItems="center"
-      padding={2}
+      gap={1}
+      paddingLeft={2}
+      paddingRight={2}
+      paddingBottom={1}
       backgroundColor={props.bg}
     >
-      <box
-        width="100%"
-        flexGrow={1}
-        flexDirection="column"
-        gap={1}
-        paddingLeft={2}
-        paddingRight={2}
-        paddingTop={1}
-        paddingBottom={1}
-      >
-        {/* Header */}
-        <box flexDirection="row" justifyContent="space-between">
-          {props.title ? <text fg={props.fg}><b>{props.title}</b></text> : null}
-          <text fg={props.muted}>esc</text>
-        </box>
-
-        {/* Rows */}
-        {props.rows.map((row) => (
-          <box flexDirection="row">
-            <text fg={props.fg}>{row.key.padEnd(maxKey)}</text>
-            <text fg={props.muted}>  {row.action}</text>
-          </box>
-        ))}
+      {/* Title bar */}
+      <box flexDirection="row" justifyContent="space-between">
+        {props.title ? <text fg={props.fg}><b>{props.title}</b></text> : null}
+        <text fg={props.muted}>esc</text>
       </box>
+
+      {/* Rows */}
+      {props.rows.map((row) => (
+        <box flexDirection="row">
+          <text fg={props.fg}>{row.key.padEnd(maxKey)}</text>
+          <text fg={props.muted}>  {row.action}</text>
+        </box>
+      ))}
     </box>
   )
 }
