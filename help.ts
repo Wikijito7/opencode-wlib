@@ -16,13 +16,30 @@ export interface HelpRow {
   action: string
 }
 
+/** Maps key names to friendly DISPLAY labels (arrows instead of words). */
+const KEY_LABELS: Record<string, string> = {
+  left: "←",
+  right: "→",
+  up: "↑",
+  down: "↓",
+  pageup: "PgUp",
+  pagedown: "PgDn",
+  escape: "esc",
+}
+
+/** Resolve a binding key to its display label; single-char keys pass through unchanged. */
+function keyLabel(key: string): string {
+  return KEY_LABELS[key] ?? key
+}
+
 /**
  * Derive the shortcut help rows from a dialog's key bindings.
  *
  * Groups bindings by their `cmd`: keys that map to the same command are
- * merged into a single row with a combined key label (e.g. `"left / h"`).
- * The array preserves the order of the first binding per command, and is
- * the single source of truth for the shortcuts table.
+ * merged into a single row with a combined key label (e.g. `"← / h"`).
+ * Each key is mapped to its friendly display label (arrows, `PgUp`/`PgDn`,
+ * `esc`) before joining. The array preserves the order of the first binding
+ * per command, and is the single source of truth for the shortcuts table.
  */
 export function buildHelpRows(bindings: KeyBinding[]): HelpRow[] {
   const byCmd = new Map<string, { keys: string[]; desc: string }>()
@@ -37,7 +54,7 @@ export function buildHelpRows(bindings: KeyBinding[]): HelpRow[] {
   }
 
   return [...byCmd.values()].map(({ keys, desc }) => ({
-    key: keys.join(" / "),
+    key: keys.map(keyLabel).join(" / "),
     action: desc,
   }))
 }

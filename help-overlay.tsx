@@ -11,12 +11,25 @@
 
 import type { JSX } from "solid-js"
 import type { HelpRow } from "./help"
+import type { ThemeColorValue } from "./theme"
+
+/**
+ * Opaque background used when no `bg` prop is supplied, so the dialog
+ * content behind the overlay is always fully covered (alpha = 1).
+ */
+const DEFAULT_BG: ThemeColorValue = "#0b0b0f"
 
 export interface HelpOverlayProps {
   rows: HelpRow[]
   fg: unknown
   muted: unknown
   title?: string
+  /**
+   * Opaque background color for the overlay box (hex string or OpenCode RGBA
+   * with alpha 1). Defaults to {@link DEFAULT_BG} so the dialog behind is
+   * never visible through the popup.
+   */
+  bg?: ThemeColorValue
 }
 
 /**
@@ -37,6 +50,7 @@ export function HelpOverlay(props: HelpOverlayProps): JSX.Element {
       flexDirection="column"
       alignItems="center"
       padding={2}
+      backgroundColor={props.bg ?? DEFAULT_BG}
     >
       <box
         borderStyle="round"

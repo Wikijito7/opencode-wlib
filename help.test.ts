@@ -9,7 +9,7 @@ describe("buildHelpRows", () => {
       { key: "enter", cmd: "confirm", desc: "Confirm" },
     ]
     expect(buildHelpRows(bindings)).toEqual([
-      { key: "up", action: "Move up" },
+      { key: "↑", action: "Move up" },
       { key: "enter", action: "Confirm" },
     ])
   })
@@ -20,7 +20,7 @@ describe("buildHelpRows", () => {
       { key: "h", cmd: "nav", desc: "Previous" },
     ]
     expect(buildHelpRows(bindings)).toEqual([
-      { key: "left / h", action: "Previous" },
+      { key: "← / h", action: "Previous" },
     ])
   })
 
@@ -31,7 +31,7 @@ describe("buildHelpRows", () => {
       { key: "n", cmd: "nav.next", desc: "Next" },
     ]
     expect(buildHelpRows(bindings)).toEqual([
-      { key: "right / l / n", action: "Next" },
+      { key: "→ / l / n", action: "Next" },
     ])
   })
 
@@ -45,7 +45,7 @@ describe("buildHelpRows", () => {
     ]
     expect(buildHelpRows(bindings)).toEqual([
       { key: "q / r", action: "Quit" },
-      { key: "left / h", action: "Previous" },
+      { key: "← / h", action: "Previous" },
       { key: "enter", action: "Confirm" },
     ])
   })
@@ -57,6 +57,29 @@ describe("buildHelpRows", () => {
     ]
     expect(buildHelpRows(bindings)).toEqual([
       { key: "x / y", action: "First desc" },
+    ])
+  })
+
+  it("maps key names to display labels (arrows, PgUp/PgDn, esc) and leaves single-char keys unchanged", () => {
+    const bindings: KeyBinding[] = [
+      { key: "left", cmd: "nav.left", desc: "Left" },
+      { key: "right", cmd: "nav.right", desc: "Right" },
+      { key: "up", cmd: "nav.up", desc: "Up" },
+      { key: "down", cmd: "nav.down", desc: "Down" },
+      { key: "pageup", cmd: "page.up", desc: "Page up" },
+      { key: "pagedown", cmd: "page.down", desc: "Page down" },
+      { key: "escape", cmd: "cancel", desc: "Cancel" },
+      { key: "r", cmd: "reload", desc: "Reload" },
+    ]
+    expect(buildHelpRows(bindings)).toEqual([
+      { key: "←", action: "Left" },
+      { key: "→", action: "Right" },
+      { key: "↑", action: "Up" },
+      { key: "↓", action: "Down" },
+      { key: "PgUp", action: "Page up" },
+      { key: "PgDn", action: "Page down" },
+      { key: "esc", action: "Cancel" },
+      { key: "r", action: "Reload" },
     ])
   })
 
