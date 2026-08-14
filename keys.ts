@@ -23,6 +23,12 @@ export interface KeyCommand {
 export interface KeyLayerConfig {
   bindings: KeyBinding[]
   commands: KeyCommand[]
+  /**
+   * Layer priority — forwarded to `api.keymap.registerLayer`. Higher
+   * priorities take precedence over lower ones. The TUI API defaults to 0
+   * when omitted.
+   */
+  priority?: number
 }
 
 /**
