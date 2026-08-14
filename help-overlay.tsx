@@ -4,9 +4,10 @@
  *
  * Renders `HelpRow`s (built by the pure `buildHelpRows` in `./help`) as an
  * absolutely-positioned popup that floats OVER the dialog content via
- * `position="absolute"` + a high `zIndex`. Percentage `width`/`height` are
- * supported by @opentui's box (see RenderableOptions), so `100%` reliably
- * covers the parent dialog area.
+ * `position="absolute"` + a high `zIndex`. It pins exactly to the parent's
+ * bounds using the `left`/`top`/`right`/`bottom` offsets supported by
+ * @opentui's box (see RenderableOptions), so it spans the dialog area without
+ * overshooting a couple rows taller than the dialog.
  */
 
 import type { JSX } from "solid-js"
@@ -19,6 +20,11 @@ export interface HelpOverlayProps {
   muted: unknown
   title?: string
   /**
+   * Optional footer rendered at the bottom-right of the overlay, pushed to
+   * the bottom by a flex-grow spacer after the rows.
+   */
+  footer?: string
+  /**
    * Opaque background color for the overlay box (hex string or OpenCode RGBA
    * with alpha 1). Pass `resolveThemeColors(api.theme.current).background` so
    * the dialog behind is never visible through the popup.
@@ -30,8 +36,9 @@ export interface HelpOverlayProps {
  * Popup-style overlay that floats OVER the dialog content.
  *
  * The outer `<box>` is absolutely positioned with a high `zIndex`, so it
- * covers the parent dialog box regardless of scroll state. It spans the
- * dialog area via `width`/`height` + `flexGrow`.
+ * covers the parent dialog box regardless of scroll state. It pins exactly to
+ * the parent's bounds via `left`/`top`/`right`/`bottom`, rendering rows
+ * tightly and anchoring an optional footer to the bottom-right.
  */
 export function HelpOverlay(props: HelpOverlayProps): JSX.Element {
   const maxKey = Math.max(0, ...props.rows.map((r) => r.key.length))
@@ -39,12 +46,14 @@ export function HelpOverlay(props: HelpOverlayProps): JSX.Element {
     <box
       position="absolute"
       zIndex={10}
-      width="100%"
-      height="100%"
+      left={0}
+      top={0}
+      right={0}
+      bottom={0}
       flexDirection="column"
-      gap={1}
       paddingLeft={2}
       paddingRight={2}
+      paddingTop={1}
       paddingBottom={1}
       backgroundColor={props.bg}
     >
@@ -61,6 +70,14 @@ export function HelpOverlay(props: HelpOverlayProps): JSX.Element {
           <text fg={props.muted}>  {row.action}</text>
         </box>
       ))}
+
+      {/* Footer (bottom-right) */}
+      <box flexGrow={1} />
+      {props.footer ? (
+        <box flexDirection="row" justifyContent="flex-end">
+          <text fg={props.muted}>{props.footer}</text>
+        </box>
+      ) : null}
     </box>
   )
 }
