@@ -58,3 +58,18 @@ export function buildHelpRows(bindings: KeyBinding[]): HelpRow[] {
     action: desc,
   }))
 }
+
+/**
+ * Build the footer line for the help overlay.
+ *
+ * Composes an optional `name` and `version` (each hidden when absent/empty)
+ * followed by the always-present `"powered by wlib"` suffix. Pure and
+ * framework-free so it can be unit-tested in isolation.
+ */
+export function buildFooter(name?: string, version?: string): string {
+  const parts: string[] = []
+  if (name) parts.push(name)
+  if (version) parts.push(`v${version}`)
+  parts.push("powered by wlib")
+  return parts.join(" ")
+}

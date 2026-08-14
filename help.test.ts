@@ -1,6 +1,6 @@
 import { describe, expect, it } from "bun:test"
 import type { KeyBinding } from "./keys"
-import { buildHelpRows } from "./help"
+import { buildFooter, buildHelpRows } from "./help"
 
 describe("buildHelpRows", () => {
   it("maps each binding to a row with key and desc as action", () => {
@@ -85,5 +85,31 @@ describe("buildHelpRows", () => {
 
   it("returns an empty array for no bindings", () => {
     expect(buildHelpRows([])).toEqual([])
+  })
+})
+
+describe("buildFooter", () => {
+  it("composes name and version", () => {
+    expect(buildFooter("model-usage", "1.0.0")).toBe(
+      "model-usage v1.0.0 powered by wlib",
+    )
+  })
+
+  it("omits version when name-only is provided", () => {
+    expect(buildFooter("model-usage")).toBe("model-usage powered by wlib")
+  })
+
+  it("omits name when version-only is provided", () => {
+    expect(buildFooter(undefined, "1.0.0")).toBe("v1.0.0 powered by wlib")
+  })
+
+  it("renders only the suffix when neither name nor version is provided", () => {
+    expect(buildFooter()).toBe("powered by wlib")
+  })
+
+  it("treats empty-string name and version as missing", () => {
+    expect(buildFooter("", "")).toBe("powered by wlib")
+    expect(buildFooter("", "1.0.0")).toBe("v1.0.0 powered by wlib")
+    expect(buildFooter("model-usage", "")).toBe("model-usage powered by wlib")
   })
 })

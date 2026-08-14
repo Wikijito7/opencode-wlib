@@ -11,7 +11,7 @@
  */
 
 import type { JSX } from "solid-js"
-import type { HelpRow } from "./help"
+import { buildFooter, type HelpRow } from "./help"
 import type { ThemeColorValue } from "./theme"
 
 export interface HelpOverlayProps {
@@ -19,11 +19,10 @@ export interface HelpOverlayProps {
   fg: unknown
   muted: unknown
   title?: string
-  /**
-   * Optional footer rendered at the bottom-right of the overlay, pushed to
-   * the bottom by a flex-grow spacer after the rows.
-   */
-  footer?: string
+  /** Optional overlay name shown in the bottom-right footer (hidden when absent). */
+  name?: string
+  /** Optional overlay version shown in the bottom-right footer (hidden when absent). */
+  version?: string
   /**
    * Opaque background color for the overlay box (hex string or OpenCode RGBA
    * with alpha 1). Pass `resolveThemeColors(api.theme.current).background` so
@@ -73,11 +72,9 @@ export function HelpOverlay(props: HelpOverlayProps): JSX.Element {
 
       {/* Footer (bottom-right) */}
       <box flexGrow={1} />
-      {props.footer ? (
-        <box flexDirection="row" justifyContent="flex-end">
-          <text fg={props.muted}>{props.footer}</text>
-        </box>
-      ) : null}
+      <box flexDirection="row" justifyContent="flex-end">
+        <text fg={props.muted}>{buildFooter(props.name, props.version)}</text>
+      </box>
     </box>
   )
 }
