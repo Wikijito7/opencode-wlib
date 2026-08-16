@@ -15,6 +15,9 @@ export type ExportFormat = "markdown" | "csv" | "json" | "text"
 /** Time bucket for a usage export. */
 export type ExportGranularity = "month" | "week" | "day"
 
+/** The basis used to compute the share % column: token-share or cost-share. */
+export type ShareBasis = "tokens" | "cost"
+
 /** Inclusive date range (`YYYY-MM-DD`) covered by an export. */
 export interface ExportPeriod {
   start: string
@@ -37,6 +40,7 @@ export interface ExportRow {
 export interface ExportData {
   period: ExportPeriod
   rows: ExportRow[]
+  shareBasis: ShareBasis
   totalInput: number
   totalOutput: number
   totalTokens: number
@@ -120,7 +124,7 @@ function csvField(value: string): string {
  */
 export function buildMarkdown(data: ExportData): string {
   const lines: string[] = [
-    `## Usage · ${data.period.start} → ${data.period.end} (${data.period.granularity})`,
+    `## Usage · ${data.period.start} → ${data.period.end} (${data.period.granularity}) · share by ${data.shareBasis}`,
     "",
     "| Provider | Model | Input | Output | Total tokens | Share % | Cost |",
     "| --- | --- | ---: | ---: | ---: | ---: | ---: |",
@@ -146,7 +150,7 @@ export function buildMarkdown(data: ExportData): string {
  */
 export function buildCsv(data: ExportData): string {
   const lines: string[] = [
-    "period_start,period_end,provider,model,input,output,total_tokens,share_pct,cost",
+    "period_start,period_end,provider,model,input,output,total_tokens,share_pct,share_basis,cost",
   ]
   for (const row of data.rows) {
     lines.push(
@@ -159,6 +163,7 @@ export function buildCsv(data: ExportData): string {
         String(row.output),
         String(row.totalTokens),
         String(row.sharePct),
+        data.shareBasis,
         String(row.cost),
       ].join(",")
     )
@@ -173,6 +178,7 @@ export function buildCsv(data: ExportData): string {
       String(data.totalOutput),
       String(data.totalTokens),
       "100",
+      data.shareBasis,
       String(data.totalCost),
     ].join(",")
   )
@@ -191,6 +197,7 @@ export function buildJson(data: ExportData): string {
         end: data.period.end,
         granularity: data.period.granularity,
       },
+      shareBasis: data.shareBasis,
       totals: {
         input: data.totalInput,
         output: data.totalOutput,
@@ -218,7 +225,7 @@ export function buildJson(data: ExportData): string {
  */
 export function buildText(data: ExportData): string {
   const lines: string[] = [
-    `Usage · ${data.period.start} → ${data.period.end} (${data.period.granularity})`,
+    `Usage · ${data.period.start} → ${data.period.end} (${data.period.granularity}) · share by ${data.shareBasis}`,
     `Total: ${formatThousands(data.totalTokens)} tokens · ${formatCost(data.totalCost)}`,
     `↑ Input  ${formatThousands(data.totalInput)}`,
     `↓ Output ${formatThousands(data.totalOutput)}`,
