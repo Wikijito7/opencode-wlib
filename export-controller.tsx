@@ -18,6 +18,7 @@ import { createEffect, createSignal, onCleanup, type JSX } from "solid-js"
 import type { TuiPluginApi } from "@opencode-ai/plugin/tui"
 import type { Exportable } from "./export"
 import { ExportOverlay } from "./export-overlay"
+import { exportKeyAction, cycleExportIndex } from "./export-state"
 import { writeClipboard } from "./clipboard"
 import { registerDialogKeyLayer } from "./keys"
 import { resolveThemeColors } from "./theme"
@@ -49,6 +50,7 @@ export function createExportController(api: TuiPluginApi, exportable: Exportable
   }
 
   async function confirm() {
+    if (!exportable.formats.length) return
     const format = exportable.formats[exportSel()].id
     const text = exportable.build(format)
     if (!text) return
@@ -60,14 +62,23 @@ export function createExportController(api: TuiPluginApi, exportable: Exportable
   }
 
   function handleKey(key: string): boolean {
-    if (!showExport()) return false
-    const n = exportable.formats.length
-    if (key === "up") { setExportSel((exportSel() + n - 1) % n); return true }
-    if (key === "down") { setExportSel((exportSel() + 1) % n); return true }
-    if (key === "enter") { void confirm(); return true }
-    if (key === "escape") { setShowExport(false); return true }
-    if (key === "e") { setShowExport(false); return true }
-    return false
+    const action = exportKeyAction(key, showExport())
+    switch (action) {
+      case "navigate-up":
+        setExportSel(cycleExportIndex(exportSel(), -1, exportable.formats.length))
+        return true
+      case "navigate-down":
+        setExportSel(cycleExportIndex(exportSel(), 1, exportable.formats.length))
+        return true
+      case "confirm":
+        void confirm()
+        return true
+      case "close":
+        setShowExport(false)
+        return true
+      case "none":
+        return false
+    }
   }
 
   createEffect(() => {
