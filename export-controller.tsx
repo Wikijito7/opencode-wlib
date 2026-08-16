@@ -24,7 +24,6 @@ import { resolveThemeColors } from "./theme"
 
 export interface ExportController {
   open(): void
-  close(): void
   handleKey(key: string): boolean
   renderOverlay(): JSX.Element | null
   copiedFlash(): boolean
@@ -50,9 +49,10 @@ export function createExportController(api: TuiPluginApi, exportable: Exportable
   }
 
   async function confirm() {
-    const formats = exportable.formats
-    const format = formats[Math.min(exportSel(), formats.length - 1)].id
-    const ok = await writeClipboard(exportable.build(format))
+    const format = exportable.formats[exportSel()].id
+    const text = exportable.build(format)
+    if (!text) return
+    const ok = await writeClipboard(text)
     if (ok) {
       flashCopied()
       setShowExport(false)
@@ -116,7 +116,6 @@ export function createExportController(api: TuiPluginApi, exportable: Exportable
 
   return {
     open: () => { setExportSel(0); setShowExport(true) },
-    close: () => setShowExport(false),
     handleKey,
     renderOverlay,
     copiedFlash: copied,
