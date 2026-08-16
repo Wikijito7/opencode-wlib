@@ -92,7 +92,7 @@ function makeTrendsData(): ExportData {
     trends: {
       values: [6912, 500],
       labels: ["Jan 31", "Jan 30"],
-      peakDay: "Wednesday",
+      peakWeekday: "Wednesday",
     },
   }
 }
@@ -101,7 +101,7 @@ function makeTrendsNoPeakData(): ExportData {
   const data = makeTrendsData()
   return {
     ...data,
-    trends: { ...data.trends!, peakDay: null },
+    trends: { ...data.trends!, peakWeekday: null },
   }
 }
 
@@ -232,7 +232,7 @@ describe("buildMarkdown", () => {
       "| OpenAI | gpt-4o-mini | 0 | 0 | 0 | 0% | $0.00 |  |",
       "|  | **Total** | 1,434 | 5,978 | 7,412 | 100% | $0.75 |  |",
       "",
-      "## Trends · last 12 months",
+      "## Trends · last 2 months",
       "",
       "| Period | Tokens |",
       "| --- | ---: |",
@@ -244,9 +244,9 @@ describe("buildMarkdown", () => {
     expect(out).toBe(expected)
   })
 
-  it("omits the Most used on line when trends.peakDay is null", () => {
+  it("omits the Most used on line when trends.peakWeekday is null", () => {
     const out = buildMarkdown(makeTrendsNoPeakData())
-    expect(out).toContain("## Trends · last 12 months")
+    expect(out).toContain("## Trends · last 2 months")
     expect(out).toContain("| Jan 31 | 6,912 |")
     expect(out).toContain("| Jan 30 | 500 |")
     expect(out).not.toContain("Most used on:")
@@ -259,7 +259,7 @@ describe("buildCsv", () => {
   it("emits header, raw-number data rows, and TOTAL row", () => {
     const out = buildCsv(makeData())
     const expected = [
-      "period_start,period_end,provider,model,input,output,total_tokens,share_pct,sort_mode,cost,cost_per_1m,projected_cost,sessions,messages,peak_day",
+      "period_start,period_end,provider,model,input,output,total_tokens,share_pct,sort_mode,cost,cost_per_1m,projected_cost,sessions,messages,peak_weekday",
       "2026-01-01,2026-01-31,Anthropic,claude-3-5-sonnet,1234,5678,6912,62.5,tokens,0.50,2.50,,,,",
       "2026-01-01,2026-01-31,OpenAI,gpt-4o,200,300,500,37.5,tokens,0.25,0,,,,",
       "2026-01-01,2026-01-31,OpenAI,gpt-4o-mini,0,0,0,0,tokens,0.00,,,,,",
@@ -314,7 +314,7 @@ describe("buildCsv", () => {
 
     const out = buildCsv(data)
     const expected = [
-      "period_start,period_end,provider,model,input,output,total_tokens,share_pct,sort_mode,cost,cost_per_1m,projected_cost,sessions,messages,peak_day",
+      "period_start,period_end,provider,model,input,output,total_tokens,share_pct,sort_mode,cost,cost_per_1m,projected_cost,sessions,messages,peak_weekday",
       // The model field contains an actual newline inside the quoted field (valid RFC 4180).
       '2026-01-01,2026-01-31,"Co, Inc.","he said ""hi""\nbye",10,20,30,50,tokens,0.10,1.50,,,,',
       "2026-01-01,2026-01-31,,TOTAL,10,20,30,100,tokens,0.10,,,,,",
@@ -337,19 +337,19 @@ describe("buildCsv", () => {
   it("emits header and TOTAL row when there are no rows", () => {
     const out = buildCsv(makeEmptyData())
     const expected = [
-      "period_start,period_end,provider,model,input,output,total_tokens,share_pct,sort_mode,cost,cost_per_1m,projected_cost,sessions,messages,peak_day",
+      "period_start,period_end,provider,model,input,output,total_tokens,share_pct,sort_mode,cost,cost_per_1m,projected_cost,sessions,messages,peak_weekday",
       "2026-02-01,2026-02-28,,TOTAL,0,0,0,100,tokens,0.00,,,,,",
     ].join("\n")
     expect(out).toBe(expected)
   })
 
-  it("header ends with sessions,messages,peak_day; model rows leave them empty", () => {
+  it("header ends with sessions,messages,peak_weekday; model rows leave them empty", () => {
     const lines = buildCsv(makeStatsData()).split("\n")
     expect(lines[0]).toBe(
-      "period_start,period_end,provider,model,input,output,total_tokens,share_pct,sort_mode,cost,cost_per_1m,projected_cost,sessions,messages,peak_day"
+      "period_start,period_end,provider,model,input,output,total_tokens,share_pct,sort_mode,cost,cost_per_1m,projected_cost,sessions,messages,peak_weekday"
     )
-    expect(lines[0]).toMatch(/peak_day$/)
-    // Model rows keep sessions, messages, and peak_day empty.
+    expect(lines[0]).toMatch(/peak_weekday$/)
+    // Model rows keep sessions, messages, and peak_weekday empty.
     expect(lines[1]).toMatch(/2\.50,,,,$/)
     expect(lines[2]).toMatch(/0,,,,$/)
   })
@@ -360,25 +360,25 @@ describe("buildCsv", () => {
     expect(totalLine).toBe(
       "2026-01-01,2026-01-31,,TOTAL,1434,5978,7412,100,tokens,0.75,,,42,1337,"
     )
-    // When null, the totals row keeps sessions/messages/peak_day empty.
+    // When null, the totals row keeps sessions/messages/peak_weekday empty.
     const nullTotal = buildCsv(makeData()).split("\n")[4]
     expect(nullTotal).toBe(
       "2026-01-01,2026-01-31,,TOTAL,1434,5978,7412,100,tokens,0.75,,,,,"
     )
   })
 
-  it("leaves peak_day empty on model rows and fills it on the totals row when trends is non-null", () => {
+  it("leaves peak_weekday empty on model rows and fills it on the totals row when trends is non-null", () => {
     const lines = buildCsv(makeTrendsData()).split("\n")
-    // Header ends with the peak_day column.
-    expect(lines[0]).toMatch(/peak_day$/)
-    // Model rows leave peak_day empty.
+    // Header ends with the peak_weekday column.
+    expect(lines[0]).toMatch(/peak_weekday$/)
+    // Model rows leave peak_weekday empty.
     expect(lines[1]).toMatch(/2\.50,,,,$/)
     expect(lines[2]).toMatch(/0,,,,$/)
-    // Totals row fills peak_day from trends.peakDay.
+    // Totals row fills peak_weekday from trends.peakWeekday.
     expect(lines[4]).toBe(
       "2026-01-01,2026-01-31,,TOTAL,1434,5978,7412,100,tokens,0.75,,,,,Wednesday"
     )
-    // When trends is null, the totals row leaves peak_day empty.
+    // When trends is null, the totals row leaves peak_weekday empty.
     expect(buildCsv(makeData()).split("\n")[4]).toMatch(/0\.75,,,,,$/)
   })
 })
@@ -493,26 +493,26 @@ describe("buildJson", () => {
 
   it("emits trends as null when absent and as object when present", () => {
     const absent = JSON.parse(buildJson(makeData())) as {
-      trends: { values: number[]; labels: string[]; peakDay: string | null } | null
+      trends: { values: number[]; labels: string[]; peakWeekday: string | null } | null
     }
     expect(absent.trends).toBeNull()
 
     const present = JSON.parse(buildJson(makeTrendsData())) as {
-      trends: { values: number[]; labels: string[]; peakDay: string | null } | null
+      trends: { values: number[]; labels: string[]; peakWeekday: string | null } | null
     }
     expect(present.trends).toEqual({
       values: [6912, 500],
       labels: ["Jan 31", "Jan 30"],
-      peakDay: "Wednesday",
+      peakWeekday: "Wednesday",
     })
 
     const noPeak = JSON.parse(buildJson(makeTrendsNoPeakData())) as {
-      trends: { values: number[]; labels: string[]; peakDay: string | null } | null
+      trends: { values: number[]; labels: string[]; peakWeekday: string | null } | null
     }
     expect(noPeak.trends).toEqual({
       values: [6912, 500],
       labels: ["Jan 31", "Jan 30"],
-      peakDay: null,
+      peakWeekday: null,
     })
   })
 })
@@ -584,7 +584,7 @@ describe("buildText", () => {
       "OpenAI/gpt-4o — 500 tokens · 37.5% · $0.25 · free",
       "OpenAI/gpt-4o-mini — 0 tokens · 0% · $0.00",
       "",
-      "Trends · last 12 months",
+      "Trends · last 2 months",
       "Jan 31  6,912",
       "Jan 30  500",
       "",
@@ -593,9 +593,9 @@ describe("buildText", () => {
     expect(out).toBe(expected)
   })
 
-  it("omits the Most used on line when trends.peakDay is null", () => {
+  it("omits the Most used on line when trends.peakWeekday is null", () => {
     const out = buildText(makeTrendsNoPeakData())
-    expect(out).toContain("Trends · last 12 months")
+    expect(out).toContain("Trends · last 2 months")
     expect(out).toContain("Jan 31  6,912")
     expect(out).toContain("Jan 30  500")
     expect(out).not.toContain("Most used on:")
