@@ -271,7 +271,7 @@ describe("buildExport dispatcher", () => {
     expect(buildExport("text", data)).toBe(buildText(data))
   })
 
-  it("throws for an unknown format (no default case)", () => {
+  it("throws for an unsupported format", () => {
     expect(() => buildExport("xml" as never, data)).toThrow()
   })
 })
