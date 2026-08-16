@@ -3,23 +3,23 @@
  * opencode-wlib — reusable "copied!" footer flash.
  *
  * Presentational footer piece: renders the hint (e.g. `e export`) normally
- * and swaps to `copied!` in the primary color while `copied()` is true.
- * Wire it to the export controller's `copiedFlash()` signal.
+ * and swaps to `copied!` in the primary color while `copied` is true.
+ * The caller passes the evaluated value (e.g. `controller.copiedFlash()`).
  */
 
 import type { JSX } from "solid-js"
 import type { ThemeColorValue } from "./theme"
 
 export interface CopiedFlashProps {
-  copied: () => boolean
+  copied: boolean
   hint: string
   muted: ThemeColorValue
   primary: ThemeColorValue
 }
 
-/** Renders `hint` normally, or `copied!` (in primary) while `copied()` is true. */
+/** Renders `hint` normally, or `copied!` (in primary) while `copied` is true. */
 export function CopiedFlash(props: CopiedFlashProps): JSX.Element {
-  return props.copied()
+  return props.copied
     ? <text fg={props.primary}>copied!</text>
     : <text fg={props.muted}>{props.hint}</text>
 }
