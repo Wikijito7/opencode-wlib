@@ -14,7 +14,7 @@ import {
 function makeData(): ExportData {
   return {
     period: { start: "2026-01-01", end: "2026-01-31", granularity: "month" },
-    shareBasis: "tokens",
+    sortMode: "tokens",
     rows: [
       {
         provider: "Anthropic",
@@ -58,7 +58,7 @@ function makeData(): ExportData {
 function makeEmptyData(): ExportData {
   return {
     period: { start: "2026-02-01", end: "2026-02-28", granularity: "month" },
-    shareBasis: "tokens",
+    sortMode: "tokens",
     rows: [],
     totalInput: 0,
     totalOutput: 0,
@@ -81,7 +81,7 @@ describe("buildMarkdown", () => {
   it("renders metadata, header, per-row values, and totals row", () => {
     const out = buildMarkdown(makeData())
     const expected = [
-      "## Usage · 2026-01-01 → 2026-01-31 (month) · share by tokens",
+      "## Usage · 2026-01-01 → 2026-01-31 (month) · sorted by tokens",
       "",
       "| Provider | Model | Input | Output | Total tokens | Share % | Cost | Cost/1M |",
       "| --- | --- | ---: | ---: | ---: | ---: | ---: | ---: |",
@@ -132,7 +132,7 @@ describe("buildMarkdown", () => {
 
     const out = buildMarkdown(data)
     const expected = [
-      "## Usage · 2026-01-01 → 2026-01-31 (month) · share by tokens",
+      "## Usage · 2026-01-01 → 2026-01-31 (month) · sorted by tokens",
       "",
       "| Provider | Model | Input | Output | Total tokens | Share % | Cost | Cost/1M |",
       "| --- | --- | ---: | ---: | ---: | ---: | ---: | ---: |",
@@ -149,7 +149,7 @@ describe("buildMarkdown", () => {
   it("emits metadata, header, and zeroed totals row when there are no rows", () => {
     const out = buildMarkdown(makeEmptyData())
     const expected = [
-      "## Usage · 2026-02-01 → 2026-02-28 (month) · share by tokens",
+      "## Usage · 2026-02-01 → 2026-02-28 (month) · sorted by tokens",
       "",
       "| Provider | Model | Input | Output | Total tokens | Share % | Cost | Cost/1M |",
       "| --- | --- | ---: | ---: | ---: | ---: | ---: | ---: |",
@@ -175,7 +175,7 @@ describe("buildCsv", () => {
   it("emits header, raw-number data rows, and TOTAL row", () => {
     const out = buildCsv(makeData())
     const expected = [
-      "period_start,period_end,provider,model,input,output,total_tokens,share_pct,share_basis,cost,cost_per_1m,projected_cost",
+      "period_start,period_end,provider,model,input,output,total_tokens,share_pct,sort_mode,cost,cost_per_1m,projected_cost",
       "2026-01-01,2026-01-31,Anthropic,claude-3-5-sonnet,1234,5678,6912,62.5,tokens,0.50,2.50,",
       "2026-01-01,2026-01-31,OpenAI,gpt-4o,200,300,500,37.5,tokens,0.25,0,",
       "2026-01-01,2026-01-31,OpenAI,gpt-4o-mini,0,0,0,0,tokens,0.00,,",
@@ -230,7 +230,7 @@ describe("buildCsv", () => {
 
     const out = buildCsv(data)
     const expected = [
-      "period_start,period_end,provider,model,input,output,total_tokens,share_pct,share_basis,cost,cost_per_1m,projected_cost",
+      "period_start,period_end,provider,model,input,output,total_tokens,share_pct,sort_mode,cost,cost_per_1m,projected_cost",
       // The model field contains an actual newline inside the quoted field (valid RFC 4180).
       '2026-01-01,2026-01-31,"Co, Inc.","he said ""hi""\nbye",10,20,30,50,tokens,0.10,1.50,',
       "2026-01-01,2026-01-31,,TOTAL,10,20,30,100,tokens,0.10,,",
@@ -253,7 +253,7 @@ describe("buildCsv", () => {
   it("emits header and TOTAL row when there are no rows", () => {
     const out = buildCsv(makeEmptyData())
     const expected = [
-      "period_start,period_end,provider,model,input,output,total_tokens,share_pct,share_basis,cost,cost_per_1m,projected_cost",
+      "period_start,period_end,provider,model,input,output,total_tokens,share_pct,sort_mode,cost,cost_per_1m,projected_cost",
       "2026-02-01,2026-02-28,,TOTAL,0,0,0,100,tokens,0.00,,",
     ].join("\n")
     expect(out).toBe(expected)
@@ -266,12 +266,12 @@ describe("buildJson", () => {
   it("produces valid JSON with period, totals, and models incl. costPerMillion", () => {
     const parsed = JSON.parse(buildJson(makeData())) as {
       period: { start: string; end: string; granularity: string }
-      shareBasis: string
+      sortMode: string
       totals: { input: number; output: number; tokens: number; cost: number }
       projection: unknown
       models: Array<Record<string, unknown>>
     }
-    expect(parsed.shareBasis).toBe("tokens")
+    expect(parsed.sortMode).toBe("tokens")
     expect(parsed.period).toEqual({
       start: "2026-01-01",
       end: "2026-01-31",
@@ -330,12 +330,12 @@ describe("buildJson", () => {
 
   it("returns empty models array but keeps totals when no rows exist", () => {
     const parsed = JSON.parse(buildJson(makeEmptyData())) as {
-      shareBasis: string
+      sortMode: string
       models: unknown[]
       projection: unknown
       totals: { input: number; output: number; tokens: number; cost: number }
     }
-    expect(parsed.shareBasis).toBe("tokens")
+    expect(parsed.sortMode).toBe("tokens")
     expect(parsed.models).toEqual([])
     expect(parsed.projection).toBeNull()
     expect(parsed.totals).toEqual({ input: 0, output: 0, tokens: 0, cost: 0 })
@@ -348,7 +348,7 @@ describe("buildText", () => {
   it("renders period line, totals lines, and one line per model", () => {
     const out = buildText(makeData())
     const expected = [
-      "Usage · 2026-01-01 → 2026-01-31 (month) · share by tokens",
+      "Usage · 2026-01-01 → 2026-01-31 (month) · sorted by tokens",
       "Total: 7,412 tokens · $0.75",
       "↑ Input  1,434",
       "↓ Output 5,978",
@@ -362,7 +362,7 @@ describe("buildText", () => {
   it("renders header + totals only when there are no rows", () => {
     const out = buildText(makeEmptyData())
     const expected = [
-      "Usage · 2026-02-01 → 2026-02-28 (month) · share by tokens",
+      "Usage · 2026-02-01 → 2026-02-28 (month) · sorted by tokens",
       "Total: 0 tokens · $0.00",
       "↑ Input  0",
       "↓ Output 0",
@@ -378,44 +378,42 @@ describe("buildText", () => {
   })
 })
 
-// ─── shareBasis "cost" vs "tokens" ───────────────────────────────────────────
+// ─── sortMode "cost" vs "tokens" vs "price" ─────────────────────────────────
 
-describe("shareBasis reflection", () => {
-  function makeCostData(): ExportData {
+describe("sortMode reflection", () => {
+  function makeSortedData(mode: "tokens" | "cost" | "price"): ExportData {
     const data = makeData()
-    data.shareBasis = "cost"
+    data.sortMode = mode
     return data
   }
 
-  it("CSV share_basis column reflects the basis", () => {
-    const tokens = buildCsv(makeData())
-    expect(tokens.split("\n")).toContain(
-      "2026-01-01,2026-01-31,Anthropic,claude-3-5-sonnet,1234,5678,6912,62.5,tokens,0.50,2.50,"
-    )
-    expect(tokens.split("\n")).toContain(
-      "2026-01-01,2026-01-31,,TOTAL,1434,5978,7412,100,tokens,0.75,,"
-    )
-
-    const cost = buildCsv(makeCostData())
-    expect(cost.split("\n")).toContain(
-      "2026-01-01,2026-01-31,Anthropic,claude-3-5-sonnet,1234,5678,6912,62.5,cost,0.50,2.50,"
-    )
-    expect(cost.split("\n")).toContain(
-      "2026-01-01,2026-01-31,,TOTAL,1434,5978,7412,100,cost,0.75,,"
-    )
+  it("CSV sort_mode column reflects the mode", () => {
+    for (const mode of ["tokens", "cost", "price"] as const) {
+      const lines = buildCsv(makeSortedData(mode)).split("\n")
+      expect(lines).toContain(
+        `2026-01-01,2026-01-31,Anthropic,claude-3-5-sonnet,1234,5678,6912,62.5,${mode},0.50,2.50,`
+      )
+      expect(lines).toContain(
+        `2026-01-01,2026-01-31,,TOTAL,1434,5978,7412,100,${mode},0.75,,`
+      )
+    }
   })
 
-  it("JSON shareBasis field reflects the basis", () => {
-    expect(JSON.parse(buildJson(makeData()))).toMatchObject({ shareBasis: "tokens" })
-    expect(JSON.parse(buildJson(makeCostData()))).toMatchObject({ shareBasis: "cost" })
+  it("JSON sortMode field reflects the mode", () => {
+    for (const mode of ["tokens", "cost", "price"] as const) {
+      expect(JSON.parse(buildJson(makeSortedData(mode)))).toMatchObject({
+        sortMode: mode,
+      })
+    }
   })
 
-  it("Markdown and Text share-by lines reflect the basis", () => {
-    expect(buildMarkdown(makeData())).toContain("share by tokens")
-    expect(buildMarkdown(makeCostData())).toContain("share by cost")
-
-    expect(buildText(makeData())).toContain("share by tokens")
-    expect(buildText(makeCostData())).toContain("share by cost")
+  it("Markdown and Text sorted-by lines reflect the mode", () => {
+    for (const mode of ["tokens", "cost", "price"] as const) {
+      expect(buildMarkdown(makeSortedData(mode))).toContain(
+        `sorted by ${mode}`
+      )
+      expect(buildText(makeSortedData(mode))).toContain(`sorted by ${mode}`)
+    }
   })
 })
 

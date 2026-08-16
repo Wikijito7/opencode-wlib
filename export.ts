@@ -15,8 +15,8 @@ export type ExportFormat = "markdown" | "csv" | "json" | "text"
 /** Time bucket for a usage export. */
 export type ExportGranularity = "month" | "week" | "day"
 
-/** The basis used to compute the share % column: token-share or cost-share. */
-export type ShareBasis = "tokens" | "cost"
+/** The mode used to sort the usage rows: token, cost, or price. */
+export type SortMode = "tokens" | "cost" | "price"
 
 /** Inclusive date range (`YYYY-MM-DD`) covered by an export. */
 export interface ExportPeriod {
@@ -52,7 +52,7 @@ export interface ExportProjection {
 export interface ExportData {
   period: ExportPeriod
   rows: ExportRow[]
-  shareBasis: ShareBasis
+  sortMode: SortMode
   totalInput: number
   totalOutput: number
   totalTokens: number
@@ -138,7 +138,7 @@ function csvField(value: string): string {
  */
 export function buildMarkdown(data: ExportData): string {
   const lines: string[] = [
-    `## Usage · ${data.period.start} → ${data.period.end} (${data.period.granularity}) · share by ${data.shareBasis}`,
+    `## Usage · ${data.period.start} → ${data.period.end} (${data.period.granularity}) · sorted by ${data.sortMode}`,
     "",
     "| Provider | Model | Input | Output | Total tokens | Share % | Cost | Cost/1M |",
     "| --- | --- | ---: | ---: | ---: | ---: | ---: | ---: |",
@@ -173,7 +173,7 @@ export function buildMarkdown(data: ExportData): string {
  */
 export function buildCsv(data: ExportData): string {
   const lines: string[] = [
-    "period_start,period_end,provider,model,input,output,total_tokens,share_pct,share_basis,cost,cost_per_1m,projected_cost",
+    "period_start,period_end,provider,model,input,output,total_tokens,share_pct,sort_mode,cost,cost_per_1m,projected_cost",
   ]
   for (const row of data.rows) {
     const costPerMillion =
@@ -192,7 +192,7 @@ export function buildCsv(data: ExportData): string {
         String(row.output),
         String(row.totalTokens),
         String(round2(row.sharePct)),
-        data.shareBasis,
+        data.sortMode,
         round2(row.cost).toFixed(2),
         costPerMillion,
         "",
@@ -212,7 +212,7 @@ export function buildCsv(data: ExportData): string {
       String(data.totalOutput),
       String(data.totalTokens),
       "100",
-      data.shareBasis,
+      data.sortMode,
       round2(data.totalCost).toFixed(2),
       "",
       projectedCost,
@@ -234,7 +234,7 @@ export function buildJson(data: ExportData): string {
         end: data.period.end,
         granularity: data.period.granularity,
       },
-      shareBasis: data.shareBasis,
+      sortMode: data.sortMode,
       totals: {
         input: data.totalInput,
         output: data.totalOutput,
@@ -271,7 +271,7 @@ export function buildJson(data: ExportData): string {
  */
 export function buildText(data: ExportData): string {
   const lines: string[] = [
-    `Usage · ${data.period.start} → ${data.period.end} (${data.period.granularity}) · share by ${data.shareBasis}`,
+    `Usage · ${data.period.start} → ${data.period.end} (${data.period.granularity}) · sorted by ${data.sortMode}`,
     `Total: ${formatThousands(data.totalTokens)} tokens · $${round2(data.totalCost).toFixed(2)}`,
     `↑ Input  ${formatThousands(data.totalInput)}`,
     `↓ Output ${formatThousands(data.totalOutput)}`,
