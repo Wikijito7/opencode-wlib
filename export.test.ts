@@ -24,6 +24,7 @@ function makeData(): ExportData {
         totalTokens: 6912,
         sharePct: 62.5,
         cost: 0.5,
+        costPerMillion: 2.5,
       },
       {
         provider: "OpenAI",
@@ -33,12 +34,24 @@ function makeData(): ExportData {
         totalTokens: 500,
         sharePct: 37.5,
         cost: 0.25,
+        costPerMillion: 0,
+      },
+      {
+        provider: "OpenAI",
+        model: "gpt-4o-mini",
+        input: 0,
+        output: 0,
+        totalTokens: 0,
+        sharePct: 0,
+        cost: 0,
+        costPerMillion: null,
       },
     ],
     totalInput: 1434,
     totalOutput: 5978,
     totalTokens: 7412,
     totalCost: 0.75,
+    projection: null,
   }
 }
 
@@ -51,6 +64,14 @@ function makeEmptyData(): ExportData {
     totalOutput: 0,
     totalTokens: 0,
     totalCost: 0,
+    projection: null,
+  }
+}
+
+function makeProjectedData(): ExportData {
+  return {
+    ...makeData(),
+    projection: { projectedCost: 1.25, elapsedDays: 21, totalDays: 31 },
   }
 }
 
@@ -62,13 +83,32 @@ describe("buildMarkdown", () => {
     const expected = [
       "## Usage · 2026-01-01 → 2026-01-31 (month) · share by tokens",
       "",
-      "| Provider | Model | Input | Output | Total tokens | Share % | Cost |",
-      "| --- | --- | ---: | ---: | ---: | ---: | ---: |",
-      "| Anthropic | claude-3-5-sonnet | 1,234 | 5,678 | 6,912 | 62.5% | $0.50 |",
-      "| OpenAI | gpt-4o | 200 | 300 | 500 | 37.5% | $0.25 |",
-      "|  | **Total** | 1,434 | 5,978 | 7,412 | 100% | $0.75 |",
+      "| Provider | Model | Input | Output | Total tokens | Share % | Cost | Cost/1M |",
+      "| --- | --- | ---: | ---: | ---: | ---: | ---: | ---: |",
+      "| Anthropic | claude-3-5-sonnet | 1,234 | 5,678 | 6,912 | 62.5% | $0.50 | $2.50/1M |",
+      "| OpenAI | gpt-4o | 200 | 300 | 500 | 37.5% | $0.25 | free |",
+      "| OpenAI | gpt-4o-mini | 0 | 0 | 0 | 0% | $0.00 |  |",
+      "|  | **Total** | 1,434 | 5,978 | 7,412 | 100% | $0.75 |  |",
     ].join("\n")
     expect(out).toBe(expected)
+  })
+
+  it("renders Cost/1M cell as free, $X.XX/1M, or blank appropriately", () => {
+    const out = buildMarkdown(makeData())
+    const lines = out.split("\n")
+
+    // Header and separator include the Cost/1M column.
+    expect(lines[2]).toBe(
+      "| Provider | Model | Input | Output | Total tokens | Share % | Cost | Cost/1M |"
+    )
+    // Paid model → $X.XX/1M.
+    expect(lines[4]).toContain("| $2.50/1M |")
+    // Free (zero-cost) model → free.
+    expect(lines[5]).toContain("| free |")
+    // Zero-token model → blank cell.
+    expect(lines[6]).toContain("| $0.00 |  |")
+    // Totals row leaves Cost/1M blank.
+    expect(lines[7]).toContain("| $0.75 |  |")
   })
 
   it("escapes pipes, backslashes, and newlines in provider/model cells", () => {
@@ -82,6 +122,7 @@ describe("buildMarkdown", () => {
         totalTokens: 3,
         sharePct: 100,
         cost: 1,
+        costPerMillion: 3,
       },
     ]
     data.totalInput = 1
@@ -93,10 +134,10 @@ describe("buildMarkdown", () => {
     const expected = [
       "## Usage · 2026-01-01 → 2026-01-31 (month) · share by tokens",
       "",
-      "| Provider | Model | Input | Output | Total tokens | Share % | Cost |",
-      "| --- | --- | ---: | ---: | ---: | ---: | ---: |",
-      "| Pipe\\|Co | back\\\\slash\\nmodel | 1 | 2 | 3 | 100% | $1.00 |",
-      "|  | **Total** | 1 | 2 | 3 | 100% | $1.00 |",
+      "| Provider | Model | Input | Output | Total tokens | Share % | Cost | Cost/1M |",
+      "| --- | --- | ---: | ---: | ---: | ---: | ---: | ---: |",
+      "| Pipe\\|Co | back\\\\slash\\nmodel | 1 | 2 | 3 | 100% | $1.00 | $3.00/1M |",
+      "|  | **Total** | 1 | 2 | 3 | 100% | $1.00 |  |",
     ].join("\n")
     expect(out).toBe(expected)
 
@@ -110,11 +151,21 @@ describe("buildMarkdown", () => {
     const expected = [
       "## Usage · 2026-02-01 → 2026-02-28 (month) · share by tokens",
       "",
-      "| Provider | Model | Input | Output | Total tokens | Share % | Cost |",
-      "| --- | --- | ---: | ---: | ---: | ---: | ---: |",
-      "|  | **Total** | 0 | 0 | 0 | 100% | $0.00 |",
+      "| Provider | Model | Input | Output | Total tokens | Share % | Cost | Cost/1M |",
+      "| --- | --- | ---: | ---: | ---: | ---: | ---: | ---: |",
+      "|  | **Total** | 0 | 0 | 0 | 100% | $0.00 |  |",
     ].join("\n")
     expect(out).toBe(expected)
+  })
+
+  it("appends an On pace line only when a projection is present", () => {
+    const without = buildMarkdown(makeData())
+    expect(without).not.toContain("On pace:")
+
+    const withProjection = buildMarkdown(makeProjectedData())
+    expect(withProjection).toContain(
+      "On pace: $1.25 by end of month"
+    )
   })
 })
 
@@ -124,12 +175,38 @@ describe("buildCsv", () => {
   it("emits header, raw-number data rows, and TOTAL row", () => {
     const out = buildCsv(makeData())
     const expected = [
-      "period_start,period_end,provider,model,input,output,total_tokens,share_pct,share_basis,cost",
-      "2026-01-01,2026-01-31,Anthropic,claude-3-5-sonnet,1234,5678,6912,62.5,tokens,0.5",
-      "2026-01-01,2026-01-31,OpenAI,gpt-4o,200,300,500,37.5,tokens,0.25",
-      "2026-01-01,2026-01-31,,TOTAL,1434,5978,7412,100,tokens,0.75",
+      "period_start,period_end,provider,model,input,output,total_tokens,share_pct,share_basis,cost,cost_per_1m,projected_cost",
+      "2026-01-01,2026-01-31,Anthropic,claude-3-5-sonnet,1234,5678,6912,62.5,tokens,0.50,2.50,",
+      "2026-01-01,2026-01-31,OpenAI,gpt-4o,200,300,500,37.5,tokens,0.25,0,",
+      "2026-01-01,2026-01-31,OpenAI,gpt-4o-mini,0,0,0,0,tokens,0.00,,",
+      "2026-01-01,2026-01-31,,TOTAL,1434,5978,7412,100,tokens,0.75,,",
     ].join("\n")
     expect(out).toBe(expected)
+  })
+
+  it("emits cost_per_1m as 0 for free, X.XX for positive, empty for null", () => {
+    const out = buildCsv(makeData())
+    const lines = out.split("\n")
+    // Paid model → two-decimal CPM.
+    expect(lines[1]).toContain("2.50,")
+    expect(lines[1]).not.toContain('"2.50"')
+    // Free (zero-cost) model → 0.
+    expect(lines[2]).toContain("0.25,0,")
+    // Zero-token model → empty cost_per_1m.
+    expect(lines[3]).toContain("0.00,,")
+    // Totals row → empty cost_per_1m and empty projected_cost.
+    expect(lines[4]).toContain("0.75,,")
+  })
+
+  it("fills projected_cost on the totals row when a projection is present", () => {
+    const out = buildCsv(makeProjectedData())
+    const lines = out.split("\n")
+    // Data rows keep projected_cost empty.
+    expect(lines[1]).toMatch(/,\s*$/)
+    // Totals row carries the projected cost (cost_per_1m is empty before it).
+    expect(lines[4]).toContain("0.75,,1.25")
+    // Without a projection the totals row projected_cost stays empty.
+    expect(buildCsv(makeData()).split("\n")[4]).toContain("0.75,,")
   })
 
   it("RFC 4180 quotes fields containing comma, double-quote, or newline", () => {
@@ -143,6 +220,7 @@ describe("buildCsv", () => {
         totalTokens: 30,
         sharePct: 50,
         cost: 0.1,
+        costPerMillion: 1.5,
       },
     ]
     data.totalInput = 10
@@ -152,10 +230,10 @@ describe("buildCsv", () => {
 
     const out = buildCsv(data)
     const expected = [
-      "period_start,period_end,provider,model,input,output,total_tokens,share_pct,share_basis,cost",
+      "period_start,period_end,provider,model,input,output,total_tokens,share_pct,share_basis,cost,cost_per_1m,projected_cost",
       // The model field contains an actual newline inside the quoted field (valid RFC 4180).
-      '2026-01-01,2026-01-31,"Co, Inc.","he said ""hi""\nbye",10,20,30,50,tokens,0.1',
-      "2026-01-01,2026-01-31,,TOTAL,10,20,30,100,tokens,0.1",
+      '2026-01-01,2026-01-31,"Co, Inc.","he said ""hi""\nbye",10,20,30,50,tokens,0.10,1.50,',
+      "2026-01-01,2026-01-31,,TOTAL,10,20,30,100,tokens,0.10,,",
     ].join("\n")
     expect(out).toBe(expected)
     // Quoted fields must start and end with a double quote and have doubled inner quotes.
@@ -168,15 +246,15 @@ describe("buildCsv", () => {
     const dataLine = out.split("\n")[1]
     expect(dataLine).toContain("1234")
     expect(dataLine).not.toContain('"1234"')
-    expect(dataLine).not.toContain('"0.5"')
+    expect(dataLine).not.toContain('"0.50"')
     expect(dataLine).not.toContain('"62.5"')
   })
 
   it("emits header and TOTAL row when there are no rows", () => {
     const out = buildCsv(makeEmptyData())
     const expected = [
-      "period_start,period_end,provider,model,input,output,total_tokens,share_pct,share_basis,cost",
-      "2026-02-01,2026-02-28,,TOTAL,0,0,0,100,tokens,0",
+      "period_start,period_end,provider,model,input,output,total_tokens,share_pct,share_basis,cost,cost_per_1m,projected_cost",
+      "2026-02-01,2026-02-28,,TOTAL,0,0,0,100,tokens,0.00,,",
     ].join("\n")
     expect(out).toBe(expected)
   })
@@ -185,11 +263,12 @@ describe("buildCsv", () => {
 // ─── buildJson ───────────────────────────────────────────────────────────────
 
 describe("buildJson", () => {
-  it("produces valid JSON with period, totals, and raw-number models", () => {
+  it("produces valid JSON with period, totals, and models incl. costPerMillion", () => {
     const parsed = JSON.parse(buildJson(makeData())) as {
       period: { start: string; end: string; granularity: string }
       shareBasis: string
       totals: { input: number; output: number; tokens: number; cost: number }
+      projection: unknown
       models: Array<Record<string, unknown>>
     }
     expect(parsed.shareBasis).toBe("tokens")
@@ -204,7 +283,8 @@ describe("buildJson", () => {
       tokens: 7412,
       cost: 0.75,
     })
-    expect(parsed.models).toHaveLength(2)
+    expect(parsed.projection).toBeNull()
+    expect(parsed.models).toHaveLength(3)
     expect(parsed.models[0]).toEqual({
       provider: "Anthropic",
       model: "claude-3-5-sonnet",
@@ -213,6 +293,38 @@ describe("buildJson", () => {
       totalTokens: 6912,
       sharePct: 62.5,
       cost: 0.5,
+      costPerMillion: 2.5,
+    })
+    expect(parsed.models[1]).toMatchObject({ costPerMillion: 0 })
+    expect(parsed.models[2]).toMatchObject({ costPerMillion: null })
+  })
+
+  it("emits costPerMillion as number/0/null and projection as object/null", () => {
+    const parsed = buildJson(makeData())
+    const parsedJson = JSON.parse(parsed) as {
+      projection: unknown
+      models: Array<{ costPerMillion: number | null }>
+    }
+    // Without projection → null.
+    expect(parsedJson.projection).toBeNull()
+    // Paid → rounded number.
+    expect(parsedJson.models[0].costPerMillion).toBe(2.5)
+    // Free → 0.
+    expect(parsedJson.models[1].costPerMillion).toBe(0)
+    // Zero-token → null.
+    expect(parsedJson.models[2].costPerMillion).toBeNull()
+
+    const withProjection = JSON.parse(buildJson(makeProjectedData())) as {
+      projection: {
+        projectedCost: number
+        elapsedDays: number
+        totalDays: number
+      } | null
+    }
+    expect(withProjection.projection).toEqual({
+      projectedCost: 1.25,
+      elapsedDays: 21,
+      totalDays: 31,
     })
   })
 
@@ -220,10 +332,12 @@ describe("buildJson", () => {
     const parsed = JSON.parse(buildJson(makeEmptyData())) as {
       shareBasis: string
       models: unknown[]
+      projection: unknown
       totals: { input: number; output: number; tokens: number; cost: number }
     }
     expect(parsed.shareBasis).toBe("tokens")
     expect(parsed.models).toEqual([])
+    expect(parsed.projection).toBeNull()
     expect(parsed.totals).toEqual({ input: 0, output: 0, tokens: 0, cost: 0 })
   })
 })
@@ -238,8 +352,9 @@ describe("buildText", () => {
       "Total: 7,412 tokens · $0.75",
       "↑ Input  1,434",
       "↓ Output 5,978",
-      "Anthropic/claude-3-5-sonnet — 6,912 tokens · 62.5% · $0.50",
-      "OpenAI/gpt-4o — 500 tokens · 37.5% · $0.25",
+      "Anthropic/claude-3-5-sonnet — 6,912 tokens · 62.5% · $0.50 · $2.50/1M",
+      "OpenAI/gpt-4o — 500 tokens · 37.5% · $0.25 · free",
+      "OpenAI/gpt-4o-mini — 0 tokens · 0% · $0.00",
     ].join("\n")
     expect(out).toBe(expected)
   })
@@ -253,6 +368,13 @@ describe("buildText", () => {
       "↓ Output 0",
     ].join("\n")
     expect(out).toBe(expected)
+  })
+
+  it("appends an On pace line only when a projection is present", () => {
+    expect(buildText(makeData())).not.toContain("On pace:")
+    expect(buildText(makeProjectedData())).toContain(
+      "On pace: $1.25 by end of month"
+    )
   })
 })
 
@@ -268,18 +390,18 @@ describe("shareBasis reflection", () => {
   it("CSV share_basis column reflects the basis", () => {
     const tokens = buildCsv(makeData())
     expect(tokens.split("\n")).toContain(
-      "2026-01-01,2026-01-31,Anthropic,claude-3-5-sonnet,1234,5678,6912,62.5,tokens,0.5"
+      "2026-01-01,2026-01-31,Anthropic,claude-3-5-sonnet,1234,5678,6912,62.5,tokens,0.50,2.50,"
     )
     expect(tokens.split("\n")).toContain(
-      "2026-01-01,2026-01-31,,TOTAL,1434,5978,7412,100,tokens,0.75"
+      "2026-01-01,2026-01-31,,TOTAL,1434,5978,7412,100,tokens,0.75,,"
     )
 
     const cost = buildCsv(makeCostData())
     expect(cost.split("\n")).toContain(
-      "2026-01-01,2026-01-31,Anthropic,claude-3-5-sonnet,1234,5678,6912,62.5,cost,0.5"
+      "2026-01-01,2026-01-31,Anthropic,claude-3-5-sonnet,1234,5678,6912,62.5,cost,0.50,2.50,"
     )
     expect(cost.split("\n")).toContain(
-      "2026-01-01,2026-01-31,,TOTAL,1434,5978,7412,100,cost,0.75"
+      "2026-01-01,2026-01-31,,TOTAL,1434,5978,7412,100,cost,0.75,,"
     )
   })
 
@@ -294,6 +416,61 @@ describe("shareBasis reflection", () => {
 
     expect(buildText(makeData())).toContain("share by tokens")
     expect(buildText(makeCostData())).toContain("share by cost")
+  })
+})
+
+// ─── Rounding ────────────────────────────────────────────────────────────────
+
+describe("rounding to two decimals", () => {
+  function makeRoundingData(): ExportData {
+    const data = makeEmptyData()
+    data.rows = [
+      {
+        provider: "Anthropic",
+        model: "claude-round",
+        input: 1,
+        output: 1,
+        totalTokens: 100,
+        sharePct: 62.525,
+        cost: 0.0102,
+        costPerMillion: 5.345,
+      },
+    ]
+    data.totalInput = 1
+    data.totalOutput = 1
+    data.totalTokens = 100
+    data.totalCost = 0.0102
+    return data
+  }
+
+  it("buildMarkdown rounds cost and sharePct to two decimals", () => {
+    const out = buildMarkdown(makeRoundingData())
+    expect(out).toContain("| 62.53% |")
+    expect(out).toContain("| $0.01 |")
+    expect(out).toContain("| $5.35/1M |")
+  })
+
+  it("buildCsv rounds cost, sharePct, and cost_per_1m to two decimals", () => {
+    const out = buildCsv(makeRoundingData())
+    expect(out).toContain(",100,62.53,tokens,0.01,5.35,")
+  })
+
+  it("buildJson rounds cost, sharePct, and costPerMillion to two decimals", () => {
+    const parsed = JSON.parse(buildJson(makeRoundingData())) as {
+      models: Array<{ cost: number; sharePct: number; costPerMillion: number }>
+      totals: { cost: number }
+    }
+    expect(parsed.models[0]).toMatchObject({
+      cost: 0.01,
+      sharePct: 62.53,
+      costPerMillion: 5.35,
+    })
+    expect(parsed.totals.cost).toBe(0.01)
+  })
+
+  it("buildText rounds cost and sharePct to two decimals", () => {
+    const out = buildText(makeRoundingData())
+    expect(out).toContain("· 62.53% · $0.01 · $5.35/1M")
   })
 })
 

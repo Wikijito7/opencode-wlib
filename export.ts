@@ -25,7 +25,11 @@ export interface ExportPeriod {
   granularity: ExportGranularity
 }
 
-/** A single provider/model usage row. `cost` is USD as a raw number. */
+/**
+ * A single provider/model usage row. `cost` is USD as a raw number;
+ * `costPerMillion` is dollars per 1M tokens: `null` when the model had zero
+ * tokens (no CPM), `0` for a free (zero-cost) model, `>0` otherwise.
+ */
 export interface ExportRow {
   provider: string
   model: string
@@ -34,6 +38,14 @@ export interface ExportRow {
   totalTokens: number
   sharePct: number
   cost: number
+  costPerMillion: number | null
+}
+
+/** Forward-looking cost projection for the period. `projectedCost` is USD. */
+export interface ExportProjection {
+  projectedCost: number // USD
+  elapsedDays: number
+  totalDays: number
 }
 
 /** A complete usage summary ready to be serialized to any export format. */
@@ -45,6 +57,7 @@ export interface ExportData {
   totalOutput: number
   totalTokens: number
   totalCost: number
+  projection: ExportProjection | null
 }
 
 /** A selectable export format option. */
@@ -93,6 +106,24 @@ function formatCost(cost: number): string {
 }
 
 /**
+ * Round a number to two decimal places (used consistently for cost, sharePct,
+ * costPerMillion, and projectedCost).
+ */
+function round2(n: number): number {
+  return Math.round(n * 100) / 100
+}
+
+/**
+ * Format a `costPerMillion` value: `null` → empty string, `0` → `free`,
+ * otherwise a `$`-prefixed two-decimal `.../1M` string.
+ */
+function formatCostPerMillion(cpm: number | null): string {
+  if (cpm === null) return ""
+  if (cpm === 0) return "free"
+  return `$${round2(cpm).toFixed(2)}/1M`
+}
+
+/**
  * Escape a cell value so it cannot break a Markdown table: backslashes first,
  * then pipes, then newlines (rendered as a literal `\n`).
  */
@@ -126,33 +157,48 @@ export function buildMarkdown(data: ExportData): string {
   const lines: string[] = [
     `## Usage · ${data.period.start} → ${data.period.end} (${data.period.granularity}) · share by ${data.shareBasis}`,
     "",
-    "| Provider | Model | Input | Output | Total tokens | Share % | Cost |",
-    "| --- | --- | ---: | ---: | ---: | ---: | ---: |",
+    "| Provider | Model | Input | Output | Total tokens | Share % | Cost | Cost/1M |",
+    "| --- | --- | ---: | ---: | ---: | ---: | ---: | ---: |",
   ]
   for (const row of data.rows) {
     lines.push(
       `| ${escapeMarkdownCell(row.provider)} | ${escapeMarkdownCell(row.model)} | ` +
         `${formatThousands(row.input)} | ${formatThousands(row.output)} | ` +
-        `${formatThousands(row.totalTokens)} | ${row.sharePct}% | ${formatCost(row.cost)} |`
+        `${formatThousands(row.totalTokens)} | ${round2(row.sharePct)}% | ` +
+        `$${round2(row.cost).toFixed(2)} | ${formatCostPerMillion(row.costPerMillion)} |`
     )
   }
   lines.push(
     `|  | **Total** | ${formatThousands(data.totalInput)} | ${formatThousands(data.totalOutput)} | ` +
-      `${formatThousands(data.totalTokens)} | 100% | ${formatCost(data.totalCost)} |`
+      `${formatThousands(data.totalTokens)} | 100% | $${round2(data.totalCost).toFixed(2)} |  |`
   )
+  if (data.projection) {
+    lines.push("")
+    lines.push(
+      `On pace: $${round2(data.projection.projectedCost).toFixed(2)} by end of month`
+    )
+  }
   return lines.join("\n")
 }
 
 /**
- * Serialize `data` to CSV (RFC 4180 quoting). Numbers are emitted as raw
- * full-precision values; `sharePct` as a bare number; `cost` as a raw number.
- * A `TOTAL` row always follows the data rows (zeroed when `rows` is empty).
+ * Serialize `data` to CSV (RFC 4180 quoting). `sharePct` is rounded to two
+ * decimals; `cost` is rounded to two decimals and emitted with two decimals;
+ * `cost_per_1m` is empty (null), `0` (free), or a two-decimal CPM; the
+ * `projected_cost` column is only filled on the totals row. A `TOTAL` row
+ * always follows the data rows (zeroed when `rows` is empty).
  */
 export function buildCsv(data: ExportData): string {
   const lines: string[] = [
-    "period_start,period_end,provider,model,input,output,total_tokens,share_pct,share_basis,cost",
+    "period_start,period_end,provider,model,input,output,total_tokens,share_pct,share_basis,cost,cost_per_1m,projected_cost",
   ]
   for (const row of data.rows) {
+    const costPerMillion =
+      row.costPerMillion === null
+        ? ""
+        : row.costPerMillion === 0
+          ? "0"
+          : round2(row.costPerMillion).toFixed(2)
     lines.push(
       [
         csvField(data.period.start),
@@ -162,12 +208,17 @@ export function buildCsv(data: ExportData): string {
         String(row.input),
         String(row.output),
         String(row.totalTokens),
-        String(row.sharePct),
+        String(round2(row.sharePct)),
         data.shareBasis,
-        String(row.cost),
+        round2(row.cost).toFixed(2),
+        costPerMillion,
+        "",
       ].join(",")
     )
   }
+  const projectedCost = data.projection
+    ? round2(data.projection.projectedCost).toFixed(2)
+    : ""
   lines.push(
     [
       csvField(data.period.start),
@@ -179,15 +230,18 @@ export function buildCsv(data: ExportData): string {
       String(data.totalTokens),
       "100",
       data.shareBasis,
-      String(data.totalCost),
+      round2(data.totalCost).toFixed(2),
+      "",
+      projectedCost,
     ].join(",")
   )
   return lines.join("\n")
 }
 
 /**
- * Serialize `data` to pretty-printed JSON (2-space indent). Raw numbers, no
- * string coercion. Empty `rows` yield `models: []` with `totals` still present.
+ * Serialize `data` to pretty-printed JSON (2-space indent). `cost`, `sharePct`,
+ * and `costPerMillion` are rounded to two decimals; `projection` is `null` when
+ * absent. Empty `rows` yield `models: []` with `totals` still present.
  */
 export function buildJson(data: ExportData): string {
   return JSON.stringify(
@@ -202,16 +256,25 @@ export function buildJson(data: ExportData): string {
         input: data.totalInput,
         output: data.totalOutput,
         tokens: data.totalTokens,
-        cost: data.totalCost,
+        cost: round2(data.totalCost),
       },
+      projection: data.projection
+        ? {
+            projectedCost: round2(data.projection.projectedCost),
+            elapsedDays: data.projection.elapsedDays,
+            totalDays: data.projection.totalDays,
+          }
+        : null,
       models: data.rows.map((row) => ({
         provider: row.provider,
         model: row.model,
         input: row.input,
         output: row.output,
         totalTokens: row.totalTokens,
-        sharePct: row.sharePct,
-        cost: row.cost,
+        sharePct: round2(row.sharePct),
+        cost: round2(row.cost),
+        costPerMillion:
+          row.costPerMillion === null ? null : round2(row.costPerMillion),
       })),
     },
     null,
@@ -226,15 +289,24 @@ export function buildJson(data: ExportData): string {
 export function buildText(data: ExportData): string {
   const lines: string[] = [
     `Usage · ${data.period.start} → ${data.period.end} (${data.period.granularity}) · share by ${data.shareBasis}`,
-    `Total: ${formatThousands(data.totalTokens)} tokens · ${formatCost(data.totalCost)}`,
+    `Total: ${formatThousands(data.totalTokens)} tokens · $${round2(data.totalCost).toFixed(2)}`,
     `↑ Input  ${formatThousands(data.totalInput)}`,
     `↓ Output ${formatThousands(data.totalOutput)}`,
   ]
   for (const row of data.rows) {
+    const suffix =
+      row.costPerMillion === null
+        ? ""
+        : row.costPerMillion === 0
+          ? " · free"
+          : ` · $${round2(row.costPerMillion).toFixed(2)}/1M`
     lines.push(
       `${row.provider}/${row.model} — ${formatThousands(row.totalTokens)} tokens · ` +
-        `${row.sharePct}% · ${formatCost(row.cost)}`
+        `${round2(row.sharePct)}% · $${round2(row.cost).toFixed(2)}${suffix}`
     )
+  }
+  if (data.projection) {
+    lines.push(`On pace: $${round2(data.projection.projectedCost).toFixed(2)} by end of month`)
   }
   return lines.join("\n")
 }
