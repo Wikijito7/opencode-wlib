@@ -89,23 +89,6 @@ function formatThousands(n: number): string {
 }
 
 /**
- * Format a USD cost as a `$`-prefixed string with at least two decimals and up
- * to six (trailing zeros trimmed). Keeps meaningful precision without surfacing
- * float noise, e.g. `$0.0102`, `$12.50`, `$0.00001`.
- */
-function formatCost(cost: number): string {
-  let fixed = cost.toFixed(6).replace(/0+$/, "")
-  const dot = fixed.indexOf(".")
-  if (dot === -1) {
-    fixed += ".00"
-  } else {
-    const decimals = fixed.length - dot - 1
-    if (decimals < 2) fixed += "0".repeat(2 - decimals)
-  }
-  return `$${fixed}`
-}
-
-/**
  * Round a number to two decimal places (used consistently for cost, sharePct,
  * costPerMillion, and projectedCost).
  */
