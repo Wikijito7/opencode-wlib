@@ -12,6 +12,7 @@
  */
 
 import type { JSX } from "solid-js"
+import { RGBA } from "@opentui/core"
 import type { ThemeColorValue } from "./theme"
 import { DIALOG_WIDTHS } from "./dialog-fit"
 
@@ -57,6 +58,7 @@ export function ExportOverlay(props: ExportOverlayProps): JSX.Element {
       bottom={0}
       alignItems="center"
       justifyContent="center"
+      backgroundColor={RGBA.fromInts(0, 0, 0, 150)}
     >
       <box
         width={DIALOG_WIDTHS.medium}
