@@ -29,7 +29,7 @@ export interface ExportOverlayProps {
   title?: string
   /** Foreground color for the title and unselected option labels. */
   fg: ThemeColorValue
-  /** Muted color for the `esc` label, spacing, and the footer line. */
+  /** Muted color for the `esc` label and the footer line. */
   muted: ThemeColorValue
   /** Accent color used to highlight the selected option. */
   primary: ThemeColorValue

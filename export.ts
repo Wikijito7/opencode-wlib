@@ -114,6 +114,16 @@ function formatCostPerMillion(cpm: number | null): string {
 }
 
 /**
+ * Build the `periodStats` suffix used in the Markdown/text header line.
+ * `null` → empty string, otherwise a ` · {sessions} sessions · {messages}
+ * messages` suffix with the counts thousands-grouped.
+ */
+function formatStatsSuffix(stats: ExportPeriodStats | null): string {
+  if (!stats) return ""
+  return ` · ${formatThousands(stats.sessions)} sessions · ${formatThousands(stats.messages)} messages`
+}
+
+/**
  * Escape a cell value so it cannot break a Markdown table: backslashes first,
  * then pipes, then newlines (rendered as a literal `\n`).
  */
@@ -144,9 +154,7 @@ function csvField(value: string): string {
  * metadata line, header, separator, and a zeroed totals row.
  */
 export function buildMarkdown(data: ExportData): string {
-  const statsSuffix = data.periodStats
-    ? ` · ${data.periodStats.sessions} sessions · ${data.periodStats.messages} messages`
-    : ""
+  const statsSuffix = formatStatsSuffix(data.periodStats)
   const lines: string[] = [
     `## Usage · ${data.period.start} → ${data.period.end} (${data.period.granularity}) · sorted by ${data.sortMode}${statsSuffix}`,
     "",
@@ -292,9 +300,7 @@ export function buildJson(data: ExportData): string {
  * Empty `rows` yield header + totals only.
  */
 export function buildText(data: ExportData): string {
-  const statsSuffix = data.periodStats
-    ? ` · ${data.periodStats.sessions} sessions · ${data.periodStats.messages} messages`
-    : ""
+  const statsSuffix = formatStatsSuffix(data.periodStats)
   const lines: string[] = [
     `Usage · ${data.period.start} → ${data.period.end} (${data.period.granularity}) · sorted by ${data.sortMode}${statsSuffix}`,
     `Total: ${formatThousands(data.totalTokens)} tokens · $${round2(data.totalCost).toFixed(2)}`,

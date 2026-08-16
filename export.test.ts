@@ -188,7 +188,7 @@ describe("buildMarkdown", () => {
   it("appends sessions/messages suffix when periodStats is present", () => {
     const meta = buildMarkdown(makeStatsData()).split("\n")[0]
     expect(meta).toBe(
-      "## Usage · 2026-01-01 → 2026-01-31 (month) · sorted by tokens · 42 sessions · 1337 messages"
+      "## Usage · 2026-01-01 → 2026-01-31 (month) · sorted by tokens · 42 sessions · 1,337 messages"
     )
   })
 })
@@ -456,7 +456,7 @@ describe("buildText", () => {
   it("appends sessions/messages suffix when periodStats is present", () => {
     const first = buildText(makeStatsData()).split("\n")[0]
     expect(first).toBe(
-      "Usage · 2026-01-01 → 2026-01-31 (month) · sorted by tokens · 42 sessions · 1337 messages"
+      "Usage · 2026-01-01 → 2026-01-31 (month) · sorted by tokens · 42 sessions · 1,337 messages"
     )
   })
 })
