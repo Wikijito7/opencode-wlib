@@ -52,6 +52,7 @@ function makeData(): ExportData {
     totalTokens: 7412,
     totalCost: 0.75,
     projection: null,
+    periodStats: null,
   }
 }
 
@@ -65,6 +66,7 @@ function makeEmptyData(): ExportData {
     totalTokens: 0,
     totalCost: 0,
     projection: null,
+    periodStats: null,
   }
 }
 
@@ -72,6 +74,13 @@ function makeProjectedData(): ExportData {
   return {
     ...makeData(),
     projection: { projectedCost: 1.25, elapsedDays: 21, totalDays: 31 },
+  }
+}
+
+function makeStatsData(): ExportData {
+  return {
+    ...makeData(),
+    periodStats: { sessions: 42, messages: 1337 },
   }
 }
 
@@ -167,6 +176,21 @@ describe("buildMarkdown", () => {
       "On pace: $1.25 by end of month"
     )
   })
+
+  it("omits sessions/messages suffix when periodStats is null", () => {
+    expect(buildMarkdown(makeData())).not.toContain("sessions")
+    expect(buildMarkdown(makeData())).not.toContain("messages")
+    expect(buildMarkdown(makeData()).split("\n")[0]).toBe(
+      "## Usage · 2026-01-01 → 2026-01-31 (month) · sorted by tokens"
+    )
+  })
+
+  it("appends sessions/messages suffix when periodStats is present", () => {
+    const meta = buildMarkdown(makeStatsData()).split("\n")[0]
+    expect(meta).toBe(
+      "## Usage · 2026-01-01 → 2026-01-31 (month) · sorted by tokens · 42 sessions · 1337 messages"
+    )
+  })
 })
 
 // ─── buildCsv ────────────────────────────────────────────────────────────────
@@ -175,11 +199,11 @@ describe("buildCsv", () => {
   it("emits header, raw-number data rows, and TOTAL row", () => {
     const out = buildCsv(makeData())
     const expected = [
-      "period_start,period_end,provider,model,input,output,total_tokens,share_pct,sort_mode,cost,cost_per_1m,projected_cost",
-      "2026-01-01,2026-01-31,Anthropic,claude-3-5-sonnet,1234,5678,6912,62.5,tokens,0.50,2.50,",
-      "2026-01-01,2026-01-31,OpenAI,gpt-4o,200,300,500,37.5,tokens,0.25,0,",
-      "2026-01-01,2026-01-31,OpenAI,gpt-4o-mini,0,0,0,0,tokens,0.00,,",
-      "2026-01-01,2026-01-31,,TOTAL,1434,5978,7412,100,tokens,0.75,,",
+      "period_start,period_end,provider,model,input,output,total_tokens,share_pct,sort_mode,cost,cost_per_1m,projected_cost,sessions,messages",
+      "2026-01-01,2026-01-31,Anthropic,claude-3-5-sonnet,1234,5678,6912,62.5,tokens,0.50,2.50,,,",
+      "2026-01-01,2026-01-31,OpenAI,gpt-4o,200,300,500,37.5,tokens,0.25,0,,,",
+      "2026-01-01,2026-01-31,OpenAI,gpt-4o-mini,0,0,0,0,tokens,0.00,,,,",
+      "2026-01-01,2026-01-31,,TOTAL,1434,5978,7412,100,tokens,0.75,,,,",
     ].join("\n")
     expect(out).toBe(expected)
   })
@@ -230,10 +254,10 @@ describe("buildCsv", () => {
 
     const out = buildCsv(data)
     const expected = [
-      "period_start,period_end,provider,model,input,output,total_tokens,share_pct,sort_mode,cost,cost_per_1m,projected_cost",
+      "period_start,period_end,provider,model,input,output,total_tokens,share_pct,sort_mode,cost,cost_per_1m,projected_cost,sessions,messages",
       // The model field contains an actual newline inside the quoted field (valid RFC 4180).
-      '2026-01-01,2026-01-31,"Co, Inc.","he said ""hi""\nbye",10,20,30,50,tokens,0.10,1.50,',
-      "2026-01-01,2026-01-31,,TOTAL,10,20,30,100,tokens,0.10,,",
+      '2026-01-01,2026-01-31,"Co, Inc.","he said ""hi""\nbye",10,20,30,50,tokens,0.10,1.50,,,',
+      "2026-01-01,2026-01-31,,TOTAL,10,20,30,100,tokens,0.10,,,,",
     ].join("\n")
     expect(out).toBe(expected)
     // Quoted fields must start and end with a double quote and have doubled inner quotes.
@@ -253,10 +277,34 @@ describe("buildCsv", () => {
   it("emits header and TOTAL row when there are no rows", () => {
     const out = buildCsv(makeEmptyData())
     const expected = [
-      "period_start,period_end,provider,model,input,output,total_tokens,share_pct,sort_mode,cost,cost_per_1m,projected_cost",
-      "2026-02-01,2026-02-28,,TOTAL,0,0,0,100,tokens,0.00,,",
+      "period_start,period_end,provider,model,input,output,total_tokens,share_pct,sort_mode,cost,cost_per_1m,projected_cost,sessions,messages",
+      "2026-02-01,2026-02-28,,TOTAL,0,0,0,100,tokens,0.00,,,,",
     ].join("\n")
     expect(out).toBe(expected)
+  })
+
+  it("header ends with sessions,messages; model rows leave them empty", () => {
+    const lines = buildCsv(makeStatsData()).split("\n")
+    expect(lines[0]).toBe(
+      "period_start,period_end,provider,model,input,output,total_tokens,share_pct,sort_mode,cost,cost_per_1m,projected_cost,sessions,messages"
+    )
+    expect(lines[0]).toMatch(/sessions,messages$/)
+    // Model rows keep sessions and messages empty.
+    expect(lines[1]).toMatch(/2\.50,,,$/)
+    expect(lines[2]).toMatch(/0,,,$/)
+  })
+
+  it("totals row fills sessions and messages when periodStats is present", () => {
+    const out = buildCsv(makeStatsData())
+    const totalLine = out.split("\n")[4]
+    expect(totalLine).toBe(
+      "2026-01-01,2026-01-31,,TOTAL,1434,5978,7412,100,tokens,0.75,,,42,1337"
+    )
+    // When null, the totals row keeps sessions/messages empty.
+    const nullTotal = buildCsv(makeData()).split("\n")[4]
+    expect(nullTotal).toBe(
+      "2026-01-01,2026-01-31,,TOTAL,1434,5978,7412,100,tokens,0.75,,,,"
+    )
   })
 })
 
@@ -269,6 +317,7 @@ describe("buildJson", () => {
       sortMode: string
       totals: { input: number; output: number; tokens: number; cost: number }
       projection: unknown
+      periodStats: unknown
       models: Array<Record<string, unknown>>
     }
     expect(parsed.sortMode).toBe("tokens")
@@ -284,6 +333,7 @@ describe("buildJson", () => {
       cost: 0.75,
     })
     expect(parsed.projection).toBeNull()
+    expect(parsed.periodStats).toBeNull()
     expect(parsed.models).toHaveLength(3)
     expect(parsed.models[0]).toEqual({
       provider: "Anthropic",
@@ -303,10 +353,13 @@ describe("buildJson", () => {
     const parsed = buildJson(makeData())
     const parsedJson = JSON.parse(parsed) as {
       projection: unknown
+      periodStats: unknown
       models: Array<{ costPerMillion: number | null }>
     }
     // Without projection → null.
     expect(parsedJson.projection).toBeNull()
+    // Without periodStats → null.
+    expect(parsedJson.periodStats).toBeNull()
     // Paid → rounded number.
     expect(parsedJson.models[0].costPerMillion).toBe(2.5)
     // Free → 0.
@@ -320,12 +373,14 @@ describe("buildJson", () => {
         elapsedDays: number
         totalDays: number
       } | null
+      periodStats: unknown
     }
     expect(withProjection.projection).toEqual({
       projectedCost: 1.25,
       elapsedDays: 21,
       totalDays: 31,
     })
+    expect(withProjection.periodStats).toBeNull()
   })
 
   it("returns empty models array but keeps totals when no rows exist", () => {
@@ -333,12 +388,25 @@ describe("buildJson", () => {
       sortMode: string
       models: unknown[]
       projection: unknown
+      periodStats: unknown
       totals: { input: number; output: number; tokens: number; cost: number }
     }
     expect(parsed.sortMode).toBe("tokens")
     expect(parsed.models).toEqual([])
     expect(parsed.projection).toBeNull()
+    expect(parsed.periodStats).toBeNull()
     expect(parsed.totals).toEqual({ input: 0, output: 0, tokens: 0, cost: 0 })
+  })
+
+  it("emits periodStats as null when absent and object when present", () => {
+    expect(
+      (JSON.parse(buildJson(makeData())) as { periodStats: unknown }).periodStats
+    ).toBeNull()
+
+    const withStats = JSON.parse(buildJson(makeStatsData())) as {
+      periodStats: { sessions: number; messages: number }
+    }
+    expect(withStats.periodStats).toEqual({ sessions: 42, messages: 1337 })
   })
 })
 
@@ -376,6 +444,21 @@ describe("buildText", () => {
       "On pace: $1.25 by end of month"
     )
   })
+
+  it("omits sessions/messages suffix when periodStats is null", () => {
+    expect(buildText(makeData())).not.toContain("sessions")
+    expect(buildText(makeData())).not.toContain("messages")
+    expect(buildText(makeData()).split("\n")[0]).toBe(
+      "Usage · 2026-01-01 → 2026-01-31 (month) · sorted by tokens"
+    )
+  })
+
+  it("appends sessions/messages suffix when periodStats is present", () => {
+    const first = buildText(makeStatsData()).split("\n")[0]
+    expect(first).toBe(
+      "Usage · 2026-01-01 → 2026-01-31 (month) · sorted by tokens · 42 sessions · 1337 messages"
+    )
+  })
 })
 
 // ─── sortMode "cost" vs "tokens" vs "price" ─────────────────────────────────
@@ -391,10 +474,10 @@ describe("sortMode reflection", () => {
     for (const mode of ["tokens", "cost", "price"] as const) {
       const lines = buildCsv(makeSortedData(mode)).split("\n")
       expect(lines).toContain(
-        `2026-01-01,2026-01-31,Anthropic,claude-3-5-sonnet,1234,5678,6912,62.5,${mode},0.50,2.50,`
+        `2026-01-01,2026-01-31,Anthropic,claude-3-5-sonnet,1234,5678,6912,62.5,${mode},0.50,2.50,,,`
       )
       expect(lines).toContain(
-        `2026-01-01,2026-01-31,,TOTAL,1434,5978,7412,100,${mode},0.75,,`
+        `2026-01-01,2026-01-31,,TOTAL,1434,5978,7412,100,${mode},0.75,,,,`
       )
     }
   })

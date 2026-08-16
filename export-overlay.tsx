@@ -43,8 +43,8 @@ export interface ExportOverlayProps {
  * Popup-style overlay listing the available export formats. The outer `<box>`
  * is absolutely positioned with a high `zIndex`, pinned exactly to the
  * parent's bounds via `left`/`top`/`right`/`bottom`, and centers the small
- * medium-width inner box (which carries the opaque `bg` and a border) over the
- * dialog content behind it.
+ * medium-width inner box (which carries the opaque `bg`) over the dialog
+ * content behind it.
  */
 export function ExportOverlay(props: ExportOverlayProps): JSX.Element {
   return (
@@ -67,8 +67,6 @@ export function ExportOverlay(props: ExportOverlayProps): JSX.Element {
         paddingTop={1}
         paddingBottom={1}
         backgroundColor={props.bg}
-        borderStyle="rounded"
-        borderColor={props.muted}
       >
         {/* Title bar */}
         <box flexDirection="row" justifyContent="space-between">
@@ -76,23 +74,24 @@ export function ExportOverlay(props: ExportOverlayProps): JSX.Element {
           <text fg={props.muted}>esc</text>
         </box>
 
-        {/* Spacer row between header and format list */}
-        <text> </text>
-
         {/* Format rows */}
-        {props.formats.map((option, index) => {
-          const selected = index === props.selectedIndex
-          return (
-            <box
-              flexDirection="row"
-              backgroundColor={selected ? props.primary : undefined}
-            >
-              <text fg={selected ? props.selectedText : props.muted}>
-                {option.label}
-              </text>
-            </box>
-          )
-        })}
+        <box flexDirection="column">
+          {props.formats.map((option, index) => {
+            const selected = index === props.selectedIndex
+            return (
+              <box
+                flexDirection="row"
+                paddingLeft={1}
+                paddingRight={1}
+                backgroundColor={selected ? props.primary : undefined}
+              >
+                <text fg={selected ? props.selectedText : props.muted}>
+                  {option.label}
+                </text>
+              </box>
+            )
+          })}
+        </box>
 
         {/* Footer */}
         <box flexDirection="row" justifyContent="flex-end">

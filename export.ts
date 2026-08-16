@@ -48,6 +48,12 @@ export interface ExportProjection {
   totalDays: number
 }
 
+/** Session and message counts for the covered period. */
+export interface ExportPeriodStats {
+  sessions: number
+  messages: number
+}
+
 /** A complete usage summary ready to be serialized to any export format. */
 export interface ExportData {
   period: ExportPeriod
@@ -58,6 +64,7 @@ export interface ExportData {
   totalTokens: number
   totalCost: number
   projection: ExportProjection | null
+  periodStats: ExportPeriodStats | null
 }
 
 /** A selectable export format option. */
@@ -137,8 +144,11 @@ function csvField(value: string): string {
  * metadata line, header, separator, and a zeroed totals row.
  */
 export function buildMarkdown(data: ExportData): string {
+  const statsSuffix = data.periodStats
+    ? ` · ${data.periodStats.sessions} sessions · ${data.periodStats.messages} messages`
+    : ""
   const lines: string[] = [
-    `## Usage · ${data.period.start} → ${data.period.end} (${data.period.granularity}) · sorted by ${data.sortMode}`,
+    `## Usage · ${data.period.start} → ${data.period.end} (${data.period.granularity}) · sorted by ${data.sortMode}${statsSuffix}`,
     "",
     "| Provider | Model | Input | Output | Total tokens | Share % | Cost | Cost/1M |",
     "| --- | --- | ---: | ---: | ---: | ---: | ---: | ---: |",
@@ -173,7 +183,7 @@ export function buildMarkdown(data: ExportData): string {
  */
 export function buildCsv(data: ExportData): string {
   const lines: string[] = [
-    "period_start,period_end,provider,model,input,output,total_tokens,share_pct,sort_mode,cost,cost_per_1m,projected_cost",
+    "period_start,period_end,provider,model,input,output,total_tokens,share_pct,sort_mode,cost,cost_per_1m,projected_cost,sessions,messages",
   ]
   for (const row of data.rows) {
     const costPerMillion =
@@ -196,12 +206,17 @@ export function buildCsv(data: ExportData): string {
         round2(row.cost).toFixed(2),
         costPerMillion,
         "",
+        "",
+        "",
       ].join(",")
     )
   }
   const projectedCost = data.projection
     ? round2(data.projection.projectedCost).toFixed(2)
     : ""
+  const statsCells = data.periodStats
+    ? [String(data.periodStats.sessions), String(data.periodStats.messages)]
+    : ["", ""]
   lines.push(
     [
       csvField(data.period.start),
@@ -216,6 +231,7 @@ export function buildCsv(data: ExportData): string {
       round2(data.totalCost).toFixed(2),
       "",
       projectedCost,
+      ...statsCells,
     ].join(",")
   )
   return lines.join("\n")
@@ -248,6 +264,12 @@ export function buildJson(data: ExportData): string {
             totalDays: data.projection.totalDays,
           }
         : null,
+      periodStats: data.periodStats
+        ? {
+            sessions: data.periodStats.sessions,
+            messages: data.periodStats.messages,
+          }
+        : null,
       models: data.rows.map((row) => ({
         provider: row.provider,
         model: row.model,
@@ -270,8 +292,11 @@ export function buildJson(data: ExportData): string {
  * Empty `rows` yield header + totals only.
  */
 export function buildText(data: ExportData): string {
+  const statsSuffix = data.periodStats
+    ? ` · ${data.periodStats.sessions} sessions · ${data.periodStats.messages} messages`
+    : ""
   const lines: string[] = [
-    `Usage · ${data.period.start} → ${data.period.end} (${data.period.granularity}) · sorted by ${data.sortMode}`,
+    `Usage · ${data.period.start} → ${data.period.end} (${data.period.granularity}) · sorted by ${data.sortMode}${statsSuffix}`,
     `Total: ${formatThousands(data.totalTokens)} tokens · $${round2(data.totalCost).toFixed(2)}`,
     `↑ Input  ${formatThousands(data.totalInput)}`,
     `↓ Output ${formatThousands(data.totalOutput)}`,
