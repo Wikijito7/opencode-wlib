@@ -67,7 +67,6 @@ export function ExportOverlay(props: ExportOverlayProps): JSX.Element {
         paddingTop={1}
         paddingBottom={1}
         backgroundColor={props.bg}
-        border
         borderStyle="rounded"
         borderColor={props.muted}
       >
