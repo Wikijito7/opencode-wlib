@@ -54,6 +54,17 @@ export interface ExportPeriodStats {
   messages: number
 }
 
+/**
+ * Usage trend series over the period. `values` and `labels` are parallel
+ * arrays, both NEWEST first. `peakDay` is the weekday with the max token
+ * total, or `null` when no peak can be determined.
+ */
+export interface ExportTrends {
+  values: number[] // token totals per bucket, NEWEST first
+  labels: string[] // parallel per-bucket labels, NEWEST first
+  peakDay: string | null // weekday with the max token total, or null
+}
+
 /** A complete usage summary ready to be serialized to any export format. */
 export interface ExportData {
   period: ExportPeriod
@@ -65,6 +76,7 @@ export interface ExportData {
   totalCost: number
   projection: ExportProjection | null
   periodStats: ExportPeriodStats | null
+  trends: ExportTrends | null
 }
 
 /** A selectable export format option. */
@@ -124,6 +136,22 @@ function formatStatsSuffix(stats: ExportPeriodStats | null): string {
 }
 
 /**
+ * Human-readable window description for the trends section, derived from the
+ * period granularity: `month` → `last 12 months`, `week` → `last 12 weeks`,
+ * `day` → `last 30 days`.
+ */
+function trendsWindowDesc(granularity: ExportGranularity): string {
+  switch (granularity) {
+    case "month":
+      return "last 12 months"
+    case "week":
+      return "last 12 weeks"
+    case "day":
+      return "last 30 days"
+  }
+}
+
+/**
  * Escape a cell value so it cannot break a Markdown table: backslashes first,
  * then pipes, then newlines (rendered as a literal `\n`).
  */
@@ -179,6 +207,22 @@ export function buildMarkdown(data: ExportData): string {
       `On pace: $${round2(data.projection.projectedCost).toFixed(2)} by end of month`
     )
   }
+  if (data.trends) {
+    lines.push("")
+    lines.push(`## Trends · ${trendsWindowDesc(data.period.granularity)}`)
+    lines.push("")
+    lines.push("| Period | Tokens |")
+    lines.push("| --- | ---: |")
+    for (let i = 0; i < data.trends.labels.length; i++) {
+      lines.push(
+        `| ${escapeMarkdownCell(data.trends.labels[i])} | ${formatThousands(data.trends.values[i])} |`
+      )
+    }
+    if (data.trends.peakDay) {
+      lines.push("")
+      lines.push(`Most used on: ${data.trends.peakDay}`)
+    }
+  }
   return lines.join("\n")
 }
 
@@ -191,7 +235,7 @@ export function buildMarkdown(data: ExportData): string {
  */
 export function buildCsv(data: ExportData): string {
   const lines: string[] = [
-    "period_start,period_end,provider,model,input,output,total_tokens,share_pct,sort_mode,cost,cost_per_1m,projected_cost,sessions,messages",
+    "period_start,period_end,provider,model,input,output,total_tokens,share_pct,sort_mode,cost,cost_per_1m,projected_cost,sessions,messages,peak_day",
   ]
   for (const row of data.rows) {
     const costPerMillion =
@@ -213,6 +257,7 @@ export function buildCsv(data: ExportData): string {
         data.sortMode,
         round2(row.cost).toFixed(2),
         costPerMillion,
+        "",
         "",
         "",
         "",
@@ -240,6 +285,7 @@ export function buildCsv(data: ExportData): string {
       "",
       projectedCost,
       ...statsCells,
+      data.trends?.peakDay ?? "",
     ].join(",")
   )
   return lines.join("\n")
@@ -276,6 +322,13 @@ export function buildJson(data: ExportData): string {
         ? {
             sessions: data.periodStats.sessions,
             messages: data.periodStats.messages,
+          }
+        : null,
+      trends: data.trends
+        ? {
+            values: data.trends.values,
+            labels: data.trends.labels,
+            peakDay: data.trends.peakDay,
           }
         : null,
       models: data.rows.map((row) => ({
@@ -321,6 +374,19 @@ export function buildText(data: ExportData): string {
   }
   if (data.projection) {
     lines.push(`On pace: $${round2(data.projection.projectedCost).toFixed(2)} by end of month`)
+  }
+  if (data.trends) {
+    lines.push("")
+    lines.push(`Trends · ${trendsWindowDesc(data.period.granularity)}`)
+    for (let i = 0; i < data.trends.labels.length; i++) {
+      lines.push(
+        `${data.trends.labels[i]}  ${formatThousands(data.trends.values[i])}`
+      )
+    }
+    if (data.trends.peakDay) {
+      lines.push("")
+      lines.push(`Most used on: ${data.trends.peakDay}`)
+    }
   }
   return lines.join("\n")
 }

@@ -53,6 +53,7 @@ function makeData(): ExportData {
     totalCost: 0.75,
     projection: null,
     periodStats: null,
+    trends: null,
   }
 }
 
@@ -67,6 +68,7 @@ function makeEmptyData(): ExportData {
     totalCost: 0,
     projection: null,
     periodStats: null,
+    trends: null,
   }
 }
 
@@ -81,6 +83,25 @@ function makeStatsData(): ExportData {
   return {
     ...makeData(),
     periodStats: { sessions: 42, messages: 1337 },
+  }
+}
+
+function makeTrendsData(): ExportData {
+  return {
+    ...makeData(),
+    trends: {
+      values: [6912, 500],
+      labels: ["Jan 31", "Jan 30"],
+      peakDay: "Wednesday",
+    },
+  }
+}
+
+function makeTrendsNoPeakData(): ExportData {
+  const data = makeTrendsData()
+  return {
+    ...data,
+    trends: { ...data.trends!, peakDay: null },
   }
 }
 
@@ -191,6 +212,45 @@ describe("buildMarkdown", () => {
       "## Usage · 2026-01-01 → 2026-01-31 (month) · sorted by tokens · 42 sessions · 1,337 messages"
     )
   })
+
+  it("omits the Trends section when trends is null", () => {
+    const out = buildMarkdown(makeData())
+    expect(out).not.toContain("## Trends")
+    expect(out).not.toContain("Most used on:")
+    expect(out).not.toContain("| Period | Tokens |")
+  })
+
+  it("renders the Trends section with header, rows, and Most used line when present", () => {
+    const out = buildMarkdown(makeTrendsData())
+    const expected = [
+      "## Usage · 2026-01-01 → 2026-01-31 (month) · sorted by tokens",
+      "",
+      "| Provider | Model | Input | Output | Total tokens | Share % | Cost | Cost/1M |",
+      "| --- | --- | ---: | ---: | ---: | ---: | ---: | ---: |",
+      "| Anthropic | claude-3-5-sonnet | 1,234 | 5,678 | 6,912 | 62.5% | $0.50 | $2.50/1M |",
+      "| OpenAI | gpt-4o | 200 | 300 | 500 | 37.5% | $0.25 | free |",
+      "| OpenAI | gpt-4o-mini | 0 | 0 | 0 | 0% | $0.00 |  |",
+      "|  | **Total** | 1,434 | 5,978 | 7,412 | 100% | $0.75 |  |",
+      "",
+      "## Trends · last 12 months",
+      "",
+      "| Period | Tokens |",
+      "| --- | ---: |",
+      "| Jan 31 | 6,912 |",
+      "| Jan 30 | 500 |",
+      "",
+      "Most used on: Wednesday",
+    ].join("\n")
+    expect(out).toBe(expected)
+  })
+
+  it("omits the Most used on line when trends.peakDay is null", () => {
+    const out = buildMarkdown(makeTrendsNoPeakData())
+    expect(out).toContain("## Trends · last 12 months")
+    expect(out).toContain("| Jan 31 | 6,912 |")
+    expect(out).toContain("| Jan 30 | 500 |")
+    expect(out).not.toContain("Most used on:")
+  })
 })
 
 // ─── buildCsv ────────────────────────────────────────────────────────────────
@@ -199,11 +259,11 @@ describe("buildCsv", () => {
   it("emits header, raw-number data rows, and TOTAL row", () => {
     const out = buildCsv(makeData())
     const expected = [
-      "period_start,period_end,provider,model,input,output,total_tokens,share_pct,sort_mode,cost,cost_per_1m,projected_cost,sessions,messages",
-      "2026-01-01,2026-01-31,Anthropic,claude-3-5-sonnet,1234,5678,6912,62.5,tokens,0.50,2.50,,,",
-      "2026-01-01,2026-01-31,OpenAI,gpt-4o,200,300,500,37.5,tokens,0.25,0,,,",
-      "2026-01-01,2026-01-31,OpenAI,gpt-4o-mini,0,0,0,0,tokens,0.00,,,,",
-      "2026-01-01,2026-01-31,,TOTAL,1434,5978,7412,100,tokens,0.75,,,,",
+      "period_start,period_end,provider,model,input,output,total_tokens,share_pct,sort_mode,cost,cost_per_1m,projected_cost,sessions,messages,peak_day",
+      "2026-01-01,2026-01-31,Anthropic,claude-3-5-sonnet,1234,5678,6912,62.5,tokens,0.50,2.50,,,,",
+      "2026-01-01,2026-01-31,OpenAI,gpt-4o,200,300,500,37.5,tokens,0.25,0,,,,",
+      "2026-01-01,2026-01-31,OpenAI,gpt-4o-mini,0,0,0,0,tokens,0.00,,,,,",
+      "2026-01-01,2026-01-31,,TOTAL,1434,5978,7412,100,tokens,0.75,,,,,",
     ].join("\n")
     expect(out).toBe(expected)
   })
@@ -254,10 +314,10 @@ describe("buildCsv", () => {
 
     const out = buildCsv(data)
     const expected = [
-      "period_start,period_end,provider,model,input,output,total_tokens,share_pct,sort_mode,cost,cost_per_1m,projected_cost,sessions,messages",
+      "period_start,period_end,provider,model,input,output,total_tokens,share_pct,sort_mode,cost,cost_per_1m,projected_cost,sessions,messages,peak_day",
       // The model field contains an actual newline inside the quoted field (valid RFC 4180).
-      '2026-01-01,2026-01-31,"Co, Inc.","he said ""hi""\nbye",10,20,30,50,tokens,0.10,1.50,,,',
-      "2026-01-01,2026-01-31,,TOTAL,10,20,30,100,tokens,0.10,,,,",
+      '2026-01-01,2026-01-31,"Co, Inc.","he said ""hi""\nbye",10,20,30,50,tokens,0.10,1.50,,,,',
+      "2026-01-01,2026-01-31,,TOTAL,10,20,30,100,tokens,0.10,,,,,",
     ].join("\n")
     expect(out).toBe(expected)
     // Quoted fields must start and end with a double quote and have doubled inner quotes.
@@ -277,34 +337,49 @@ describe("buildCsv", () => {
   it("emits header and TOTAL row when there are no rows", () => {
     const out = buildCsv(makeEmptyData())
     const expected = [
-      "period_start,period_end,provider,model,input,output,total_tokens,share_pct,sort_mode,cost,cost_per_1m,projected_cost,sessions,messages",
-      "2026-02-01,2026-02-28,,TOTAL,0,0,0,100,tokens,0.00,,,,",
+      "period_start,period_end,provider,model,input,output,total_tokens,share_pct,sort_mode,cost,cost_per_1m,projected_cost,sessions,messages,peak_day",
+      "2026-02-01,2026-02-28,,TOTAL,0,0,0,100,tokens,0.00,,,,,",
     ].join("\n")
     expect(out).toBe(expected)
   })
 
-  it("header ends with sessions,messages; model rows leave them empty", () => {
+  it("header ends with sessions,messages,peak_day; model rows leave them empty", () => {
     const lines = buildCsv(makeStatsData()).split("\n")
     expect(lines[0]).toBe(
-      "period_start,period_end,provider,model,input,output,total_tokens,share_pct,sort_mode,cost,cost_per_1m,projected_cost,sessions,messages"
+      "period_start,period_end,provider,model,input,output,total_tokens,share_pct,sort_mode,cost,cost_per_1m,projected_cost,sessions,messages,peak_day"
     )
-    expect(lines[0]).toMatch(/sessions,messages$/)
-    // Model rows keep sessions and messages empty.
-    expect(lines[1]).toMatch(/2\.50,,,$/)
-    expect(lines[2]).toMatch(/0,,,$/)
+    expect(lines[0]).toMatch(/peak_day$/)
+    // Model rows keep sessions, messages, and peak_day empty.
+    expect(lines[1]).toMatch(/2\.50,,,,$/)
+    expect(lines[2]).toMatch(/0,,,,$/)
   })
 
   it("totals row fills sessions and messages when periodStats is present", () => {
     const out = buildCsv(makeStatsData())
     const totalLine = out.split("\n")[4]
     expect(totalLine).toBe(
-      "2026-01-01,2026-01-31,,TOTAL,1434,5978,7412,100,tokens,0.75,,,42,1337"
+      "2026-01-01,2026-01-31,,TOTAL,1434,5978,7412,100,tokens,0.75,,,42,1337,"
     )
-    // When null, the totals row keeps sessions/messages empty.
+    // When null, the totals row keeps sessions/messages/peak_day empty.
     const nullTotal = buildCsv(makeData()).split("\n")[4]
     expect(nullTotal).toBe(
-      "2026-01-01,2026-01-31,,TOTAL,1434,5978,7412,100,tokens,0.75,,,,"
+      "2026-01-01,2026-01-31,,TOTAL,1434,5978,7412,100,tokens,0.75,,,,,"
     )
+  })
+
+  it("leaves peak_day empty on model rows and fills it on the totals row when trends is non-null", () => {
+    const lines = buildCsv(makeTrendsData()).split("\n")
+    // Header ends with the peak_day column.
+    expect(lines[0]).toMatch(/peak_day$/)
+    // Model rows leave peak_day empty.
+    expect(lines[1]).toMatch(/2\.50,,,,$/)
+    expect(lines[2]).toMatch(/0,,,,$/)
+    // Totals row fills peak_day from trends.peakDay.
+    expect(lines[4]).toBe(
+      "2026-01-01,2026-01-31,,TOTAL,1434,5978,7412,100,tokens,0.75,,,,,Wednesday"
+    )
+    // When trends is null, the totals row leaves peak_day empty.
+    expect(buildCsv(makeData()).split("\n")[4]).toMatch(/0\.75,,,,,$/)
   })
 })
 
@@ -318,6 +393,7 @@ describe("buildJson", () => {
       totals: { input: number; output: number; tokens: number; cost: number }
       projection: unknown
       periodStats: unknown
+      trends: unknown
       models: Array<Record<string, unknown>>
     }
     expect(parsed.sortMode).toBe("tokens")
@@ -334,6 +410,7 @@ describe("buildJson", () => {
     })
     expect(parsed.projection).toBeNull()
     expect(parsed.periodStats).toBeNull()
+    expect(parsed.trends).toBeNull()
     expect(parsed.models).toHaveLength(3)
     expect(parsed.models[0]).toEqual({
       provider: "Anthropic",
@@ -354,12 +431,15 @@ describe("buildJson", () => {
     const parsedJson = JSON.parse(parsed) as {
       projection: unknown
       periodStats: unknown
+      trends: unknown
       models: Array<{ costPerMillion: number | null }>
     }
     // Without projection → null.
     expect(parsedJson.projection).toBeNull()
     // Without periodStats → null.
     expect(parsedJson.periodStats).toBeNull()
+    // Without trends → null.
+    expect(parsedJson.trends).toBeNull()
     // Paid → rounded number.
     expect(parsedJson.models[0].costPerMillion).toBe(2.5)
     // Free → 0.
@@ -389,12 +469,14 @@ describe("buildJson", () => {
       models: unknown[]
       projection: unknown
       periodStats: unknown
+      trends: unknown
       totals: { input: number; output: number; tokens: number; cost: number }
     }
     expect(parsed.sortMode).toBe("tokens")
     expect(parsed.models).toEqual([])
     expect(parsed.projection).toBeNull()
     expect(parsed.periodStats).toBeNull()
+    expect(parsed.trends).toBeNull()
     expect(parsed.totals).toEqual({ input: 0, output: 0, tokens: 0, cost: 0 })
   })
 
@@ -407,6 +489,31 @@ describe("buildJson", () => {
       periodStats: { sessions: number; messages: number }
     }
     expect(withStats.periodStats).toEqual({ sessions: 42, messages: 1337 })
+  })
+
+  it("emits trends as null when absent and as object when present", () => {
+    const absent = JSON.parse(buildJson(makeData())) as {
+      trends: { values: number[]; labels: string[]; peakDay: string | null } | null
+    }
+    expect(absent.trends).toBeNull()
+
+    const present = JSON.parse(buildJson(makeTrendsData())) as {
+      trends: { values: number[]; labels: string[]; peakDay: string | null } | null
+    }
+    expect(present.trends).toEqual({
+      values: [6912, 500],
+      labels: ["Jan 31", "Jan 30"],
+      peakDay: "Wednesday",
+    })
+
+    const noPeak = JSON.parse(buildJson(makeTrendsNoPeakData())) as {
+      trends: { values: number[]; labels: string[]; peakDay: string | null } | null
+    }
+    expect(noPeak.trends).toEqual({
+      values: [6912, 500],
+      labels: ["Jan 31", "Jan 30"],
+      peakDay: null,
+    })
   })
 })
 
@@ -459,6 +566,40 @@ describe("buildText", () => {
       "Usage · 2026-01-01 → 2026-01-31 (month) · sorted by tokens · 42 sessions · 1,337 messages"
     )
   })
+
+  it("omits the Trends section when trends is null", () => {
+    const out = buildText(makeData())
+    expect(out).not.toContain("Trends ·")
+    expect(out).not.toContain("Most used on:")
+  })
+
+  it("renders the Trends section with header, rows, and Most used line when present", () => {
+    const out = buildText(makeTrendsData())
+    const expected = [
+      "Usage · 2026-01-01 → 2026-01-31 (month) · sorted by tokens",
+      "Total: 7,412 tokens · $0.75",
+      "↑ Input  1,434",
+      "↓ Output 5,978",
+      "Anthropic/claude-3-5-sonnet — 6,912 tokens · 62.5% · $0.50 · $2.50/1M",
+      "OpenAI/gpt-4o — 500 tokens · 37.5% · $0.25 · free",
+      "OpenAI/gpt-4o-mini — 0 tokens · 0% · $0.00",
+      "",
+      "Trends · last 12 months",
+      "Jan 31  6,912",
+      "Jan 30  500",
+      "",
+      "Most used on: Wednesday",
+    ].join("\n")
+    expect(out).toBe(expected)
+  })
+
+  it("omits the Most used on line when trends.peakDay is null", () => {
+    const out = buildText(makeTrendsNoPeakData())
+    expect(out).toContain("Trends · last 12 months")
+    expect(out).toContain("Jan 31  6,912")
+    expect(out).toContain("Jan 30  500")
+    expect(out).not.toContain("Most used on:")
+  })
 })
 
 // ─── sortMode "cost" vs "tokens" vs "price" ─────────────────────────────────
@@ -474,10 +615,10 @@ describe("sortMode reflection", () => {
     for (const mode of ["tokens", "cost", "price"] as const) {
       const lines = buildCsv(makeSortedData(mode)).split("\n")
       expect(lines).toContain(
-        `2026-01-01,2026-01-31,Anthropic,claude-3-5-sonnet,1234,5678,6912,62.5,${mode},0.50,2.50,,,`
+        `2026-01-01,2026-01-31,Anthropic,claude-3-5-sonnet,1234,5678,6912,62.5,${mode},0.50,2.50,,,,`
       )
       expect(lines).toContain(
-        `2026-01-01,2026-01-31,,TOTAL,1434,5978,7412,100,${mode},0.75,,,,`
+        `2026-01-01,2026-01-31,,TOTAL,1434,5978,7412,100,${mode},0.75,,,,,`
       )
     }
   })
