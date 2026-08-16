@@ -247,5 +247,7 @@ export function buildExport(format: ExportFormat, data: ExportData): string {
       return buildJson(data)
     case "text":
       return buildText(data)
+    default:
+      throw new Error(`Unknown export format: ${String(format)}`)
   }
 }
