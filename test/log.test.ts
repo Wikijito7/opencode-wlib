@@ -2,7 +2,7 @@ import { describe, expect, it, afterEach } from "bun:test"
 import { existsSync, readFileSync, unlinkSync, mkdtempSync, rmSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
-import { createLog } from "./log"
+import { createLog } from "../src/core/log"
 
 afterEach(() => {
   delete process.env.OPENCODE_WLIB_DEBUG

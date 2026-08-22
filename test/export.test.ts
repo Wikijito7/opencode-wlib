@@ -1,5 +1,5 @@
 import { describe, expect, it } from "bun:test"
-import { EXPORT_FORMATS, formatToExtension } from "./export"
+import { EXPORT_FORMATS, formatToExtension } from "../src/core/export"
 
 describe("formatToExtension", () => {
   it("maps markdown to md", () => {

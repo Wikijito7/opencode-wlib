@@ -1,6 +1,6 @@
 import { describe, expect, it } from "bun:test"
-import type { KeyBinding } from "./keys"
-import { buildFooter, buildHelpRows } from "./help"
+import type { KeyBinding } from "../src/core/keys"
+import { buildFooter, buildHelpRows } from "../src/core/help"
 
 describe("buildHelpRows", () => {
   it("maps each binding to a row with key and desc as action", () => {

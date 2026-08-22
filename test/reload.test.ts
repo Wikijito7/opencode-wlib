@@ -1,5 +1,5 @@
 import { describe, expect, it } from "bun:test"
-import { createLoadGuard } from "./reload"
+import { createLoadGuard } from "../src/core/reload"
 
 describe("createLoadGuard", () => {
   it("invalidates the generation on every call", () => {

@@ -2,7 +2,7 @@ import { describe, expect, it } from "bun:test"
 import { mkdtempSync, readFileSync, rmSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
-import { exportFilePath, timestamp, writeFile } from "./file"
+import { exportFilePath, timestamp, writeFile } from "../src/core/file"
 
 describe("timestamp", () => {
   it("matches YYYYMMDD-HHmmssNNN structure", () => {

@@ -10,8 +10,8 @@
 
 import type { JSX } from "solid-js"
 import { RGBA } from "@opentui/core"
-import type { ThemeColorValue } from "./theme"
-import { DIALOG_WIDTHS } from "./dialog-fit"
+import type { ThemeColorValue } from "../core/theme"
+import { DIALOG_WIDTHS } from "../core/dialog-fit"
 
 export interface ExportResultOverlayProps {
   /** Absolute path of the written file, or null when the write failed. */

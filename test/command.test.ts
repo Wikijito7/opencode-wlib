@@ -1,5 +1,5 @@
 import { describe, expect, it } from "bun:test"
-import { registerSlashCommand } from "./command"
+import { registerSlashCommand } from "../src/core/command"
 
 // Minimal TUI API mock capturing registerLayer calls.
 function makeApiMock() {

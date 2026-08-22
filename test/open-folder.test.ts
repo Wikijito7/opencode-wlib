@@ -1,7 +1,7 @@
 import { describe, expect, it, mock, spyOn } from "bun:test"
 import * as cp from "node:child_process"
 import * as process from "node:process"
-import { openFolder, resolveOpenFolderCommand } from "./open-folder"
+import { openFolder, resolveOpenFolderCommand } from "../src/core/open-folder"
 
 describe("resolveOpenFolderCommand", () => {
   it("maps darwin to open", () => {

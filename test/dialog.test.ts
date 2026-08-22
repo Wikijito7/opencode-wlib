@@ -1,5 +1,5 @@
 import { describe, expect, it } from "bun:test"
-import { resolveDialogFit, resolveDialogMaxHeight, resolveDialogSize, DIALOG_WIDTHS } from "./dialog-fit"
+import { resolveDialogFit, resolveDialogMaxHeight, resolveDialogSize, DIALOG_WIDTHS } from "../src/core/dialog-fit"
 
 // ─── resolveDialogSize ───────────────────────────────────────────────────────
 

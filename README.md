@@ -169,16 +169,16 @@ Import from plugins:
 
 ```ts
 // persona-injector-server.ts (server side — system snapshot writer)
-import { writeSystemSnapshot, isTitleGenerator } from "./persona-injector/wlib/system"
+import { writeSystemSnapshot, isTitleGenerator } from "./persona-injector/wlib/src/core/system"
 
 // model-usage/analyze-domain.ts (TUI side — system snapshot reader)
-import { readSystemSnapshot } from "./wlib/system"
+import { readSystemSnapshot } from "./wlib/src/core/system"
 
 // any dialog
-import { makeScrollState } from "./wlib/scroll"
-import { registerDialogKeyLayer } from "./wlib/keys"
-import { resolveThemeColors } from "./wlib/theme"
-import { DialogShell } from "./wlib/dialog"
+import { makeScrollState } from "./wlib/src/core/scroll"
+import { registerDialogKeyLayer } from "./wlib/src/core/keys"
+import { resolveThemeColors } from "./wlib/src/core/theme"
+import { DialogShell } from "./wlib/src/ui/dialog"
 ```
 
 ## Development
