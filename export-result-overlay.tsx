@@ -80,33 +80,33 @@ export function ExportResultOverlay(props: ExportResultOverlayProps): JSX.Elemen
           )}
         </box>
 
-        {/* Footer hint */}
-        <box flexDirection="row" justifyContent="flex-end">
-          <text fg={props.muted}>←→ choose · enter open/close · esc close</text>
-        </box>
-
-        {/* Button row — two half-width buttons with a clear margin between */}
+        {/* Button row — two half-width buttons, clear margin between */}
         <box flexDirection="row" gap={2} paddingLeft={1} paddingRight={1}>
           <box
-            flex={1}
+            flexGrow={1}
             alignItems="center"
             justifyContent="center"
             paddingTop={1}
             paddingBottom={1}
             backgroundColor={props.focus === 0 ? props.primary : undefined}
           >
-            <text fg={props.focus === 0 ? props.selectedText : props.muted}>[Close]</text>
+            <text fg={props.focus === 0 ? props.selectedText : props.muted}>Close</text>
           </box>
           <box
-            flex={1}
+            flexGrow={1}
             alignItems="center"
             justifyContent="center"
             paddingTop={1}
             paddingBottom={1}
             backgroundColor={!props.error && props.focus === 1 ? props.primary : undefined}
           >
-            <text fg={!props.error && props.focus === 1 ? props.selectedText : props.muted}>[Open]</text>
+            <text fg={!props.error && props.focus === 1 ? props.selectedText : props.muted}>Open</text>
           </box>
+        </box>
+
+        {/* Footer hint */}
+        <box flexDirection="row" justifyContent="flex-end">
+          <text fg={props.muted}>←→ choose · enter open/close · esc close</text>
         </box>
       </box>
     </box>
