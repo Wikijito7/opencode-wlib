@@ -241,13 +241,14 @@ export function createExportController(api: TuiPluginApi, exportable: Exportable
   })
 
   function renderOverlay(): JSX.Element | null {
-    if (step() !== "format" && step() !== "destination") return null
+    if (!showExport()) return null
+    const isDest = step() === "destination"
     return (
       <ExportOverlay
-        title={step() === "format" ? "Export" : "Export to"}
-        formats={step() === "format" ? exportable.formats : DEST_OPTIONS}
-        selectedIndex={step() === "format" ? exportSel() : destSel()}
-        footer={step() === "format" ? "↑↓ choose · enter continue" : "↑↓ choose · enter confirm · esc back"}
+        title={isDest ? "Export to" : "Export"}
+        formats={isDest ? DEST_OPTIONS : exportable.formats}
+        selectedIndex={isDest ? destSel() : exportSel()}
+        footer={isDest ? "↑↓ choose · enter confirm · esc back" : "↑↓ choose · enter continue"}
         fg={colors.fg}
         muted={colors.muted}
         primary={colors.primary}
