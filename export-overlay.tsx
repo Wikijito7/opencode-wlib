@@ -28,6 +28,8 @@ export interface ExportOverlayProps {
   selectedIndex: number
   /** Title shown in the header bar. Defaults to "Export". */
   title?: string
+  /** Footer hint text. Defaults to "↑↓ choose · enter export". */
+  footer?: string
   /** Foreground color for the title and unselected option labels. */
   fg: ThemeColorValue
   /** Muted color for the `esc` label and the footer line. */
@@ -97,7 +99,7 @@ export function ExportOverlay(props: ExportOverlayProps): JSX.Element {
 
         {/* Footer */}
         <box flexDirection="row" justifyContent="flex-end">
-          <text fg={props.muted}>↑↓ choose · enter export</text>
+          <text fg={props.muted}>{props.footer ?? "↑↓ choose · enter export"}</text>
         </box>
       </box>
     </box>

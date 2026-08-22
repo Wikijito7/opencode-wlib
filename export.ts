@@ -31,6 +31,16 @@ export const EXPORT_FORMATS: ExportFormatOption[] = [
   { id: "text", label: "Plain text" },
 ]
 
+/** Map an export format to its file extension. */
+export function formatToExtension(format: ExportFormat): string {
+  switch (format) {
+    case "markdown": return "md"
+    case "csv": return "csv"
+    case "json": return "json"
+    case "text": return "txt"
+  }
+}
+
 // ─── Contract ─────────────────────────────────────────────────────────────────
 
 /** The contract each export implementer satisfies. */
