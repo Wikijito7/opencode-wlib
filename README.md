@@ -90,6 +90,66 @@ Desired size/height with graceful fallback: the dialog picks the largest width t
 - `useDialogSizing(desired?)` → reactive `{ size, maxHeight }` from the host terminal dimensions (host-only import — keep out of unit tests)
 - `<DialogShell title subtitle fg muted scroll footer desired onSizeChange>` → the common dialog frame; applies the responsive sizing automatically (pass `onSizeChange` → `api.ui.dialog.setSize` to keep the host in sync)
 
+### `export` — export pipeline (core + UI)
+
+A reusable export flow shared by every plugin that needs to dump data (usage, analyze, …). The **contract and pure helpers live in core** (`export`, `export-state`, `file`, `open-folder`); the **SolidJS/TUI pieces live in UI** (`export-controller`, `export-overlay`, `export-result-overlay`). The actual serializers (`build(format)`) are implemented by the host plugin, NOT here.
+
+**Contract (`export`, core):**
+
+| Export | Description |
+|---|---|
+| `ExportFormat` | `"markdown" \| "csv" \| "json" \| "text"` |
+| `ExportFormatOption` | `{ id: ExportFormat, label: string }` |
+| `EXPORT_FORMATS` | The four supported formats, in display order. |
+| `formatToExtension(format)` | Map a format to its file extension (`md`/`csv`/`json`/`txt`). |
+| `Exportable` | Contract each implementer satisfies: `{ formats: ExportFormatOption[], build(format): string }`. |
+
+**State (`export-state`, core):**
+
+| Function | Description |
+|---|---|
+| `ExportKeyAction` | `"navigate-up" \| "navigate-down" \| "confirm" \| "close" \| "none"` |
+| `exportKeyAction(key, isOpen)` | Map a key to an export action (`none` when closed/unrelated). |
+| `cycleExportIndex(current, delta, count)` | Move selection by ±1 with wraparound (0 for empty list). |
+
+**File helpers (`file`, core):** path builders are pure; `writeFile` swallows errors and returns a boolean.
+
+| Function | Description |
+|---|---|
+| `EXPORT_BASE_DIR` | Default save dir `~/.config/opencode/export`. |
+| `timestamp()` | Local `YYYYMMDD-HHmmssNNN` stamp for filenames. |
+| `exportFilePath(name, ext, ts, base?)` | Build the full destination path (defaults to `EXPORT_BASE_DIR`). |
+| `writeFile(filePath, content)` | Best-effort write (creates parent dirs) → `Promise<boolean>`. |
+
+**Open folder (`open-folder`, core):** `resolveOpenFolderCommand(platform, dir)` (pure) → `{ cmd, args } \| null` for `open`/`xdg-open`/`explorer`; `openFolder(dir)` → `Promise<boolean>` spawns detached, ignores result.
+
+**Controller (`export-controller`, UI):** `createExportController(api, exportable, opts)` → `ExportController`, created inside a Solid owner (dialog render). Owns the format → destination → result state machine, a priority-2 key layer, clipboard/disk writes, and the "copied!" flash.
+
+- `ExportControllerOptions`: `{ name: string, exportDir?: string }`
+- `ExportController`: `open()`, `handleKey(key) → boolean`, `renderOverlay() → JSX.Element | null`, `renderResultOverlay() → JSX.Element | null`, `copiedFlash() → boolean`, `onCopied(listener) → cleanup`
+
+**Overlays (`export-overlay`, `export-result-overlay`, UI):** fully presentational popups (no key handling, no side effects). `ExportOverlay(props)` lists format/destination options (`ExportOverlayOption`, `ExportOverlayProps`); `ExportResultOverlay(props)` reports the saved path (or error) with `Close`/`Open` buttons (`ExportResultOverlayProps`).
+
+### `help` — shortcut help (core + UI)
+
+**Builder (`help`, core):** pure, framework-free source of truth for the shortcuts table.
+
+| Function | Description |
+|---|---|
+| `HelpRow` | `{ key: string, action: string }` (combined key label + description). |
+| `buildHelpRows(bindings)` | One row per `cmd`; merges aliased keys into a combined label (e.g. `← / h`). |
+| `buildFooter(name?, version?)` | `"name vX powered by wlib"` (parts hidden when absent). |
+
+**Overlay (`help-overlay`, UI):** `HelpOverlay(props)` — absolutely-positioned popup rendering `HelpRow`s (from `buildHelpRows`) with an optional bottom-right `name`/`version` footer (`HelpOverlayProps`).
+
+### `copied-flash` — reactive "copied!" footer flash (UI)
+
+`CopiedFlash(props)` renders `hint` normally and swaps to `copied!` (in primary) while `copied` is true. Reactive via `<Show>`; caller passes the evaluated value (e.g. `controller.copiedFlash()`).
+
+| Prop | Description |
+|---|---|
+| `CopiedFlashProps` | `{ copied: boolean, hint: string, muted: ThemeColorValue, primary: ThemeColorValue }` |
+
 ## Usage as a git submodule
 
 ```bash
