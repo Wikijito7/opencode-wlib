@@ -80,14 +80,14 @@ export function ExportResultOverlay(props: ExportResultOverlayProps): JSX.Elemen
           )}
         </box>
 
-        {/* Button row — two half-width buttons, clear margin between */}
-        <box flexDirection="row" gap={2} paddingLeft={1} paddingRight={1}>
+        {/* Button row — mirrors analyze tab height (1 line), half-width each, dialog gap padding */}
+        <box flexDirection="row" gap={2}>
           <box
             flexGrow={1}
             alignItems="center"
             justifyContent="center"
-            paddingTop={1}
-            paddingBottom={1}
+            paddingLeft={1}
+            paddingRight={1}
             backgroundColor={props.focus === 0 ? props.primary : undefined}
           >
             <text fg={props.focus === 0 ? props.selectedText : props.muted}>Close</text>
@@ -96,8 +96,8 @@ export function ExportResultOverlay(props: ExportResultOverlayProps): JSX.Elemen
             flexGrow={1}
             alignItems="center"
             justifyContent="center"
-            paddingTop={1}
-            paddingBottom={1}
+            paddingLeft={1}
+            paddingRight={1}
             backgroundColor={!props.error && props.focus === 1 ? props.primary : undefined}
           >
             <text fg={!props.error && props.focus === 1 ? props.selectedText : props.muted}>Open</text>
