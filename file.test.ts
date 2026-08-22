@@ -5,17 +5,17 @@ import { join } from "node:path"
 import { exportFilePath, timestamp, writeFile } from "./file"
 
 describe("timestamp", () => {
-  it("matches YYYYMMDD-HHmmss structure", () => {
+  it("matches YYYYMMDD-HHmmssNNN structure", () => {
     const t = timestamp()
-    expect(t).toMatch(/^\d{8}-\d{6}$/)
+    expect(t).toMatch(/^\d{8}-\d{9}$/)
   })
 
-  it("has length 15 with a date part and a time part separated by a dash", () => {
+  it("has length 18 with a date part and a time part separated by a dash", () => {
     const t = timestamp()
-    expect(t.length).toBe(15)
+    expect(t.length).toBe(18)
     const [date, time] = t.split("-")
     expect(date.length).toBe(8)
-    expect(time.length).toBe(6)
+    expect(time.length).toBe(9)
     // Date must be a real calendar date.
     const year = Number(date.slice(0, 4))
     const month = Number(date.slice(4, 6))

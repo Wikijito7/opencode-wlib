@@ -18,11 +18,12 @@ export const EXPORT_BASE_DIR = join(homedir(), ".config", "opencode", "export")
 
 // ─── Path builders ───────────────────────────────────────────────────────────
 
-/** Local `YYYYMMDD-HHmmss` timestamp used to uniquify export filenames. */
+/** Local `YYYYMMDD-HHmmssNNN` timestamp used to uniquify export filenames. */
 export function timestamp(): string {
   const d = new Date()
-  const p = (n: number) => String(n).padStart(2, "0")
-  return `${d.getFullYear()}${p(d.getMonth() + 1)}${p(d.getDate())}-${p(d.getHours())}${p(d.getMinutes())}${p(d.getSeconds())}`
+  const p = (n: number, l = 2) => String(n).padStart(l, "0")
+  const ms = p(d.getMilliseconds(), 3)
+  return `${d.getFullYear()}${p(d.getMonth() + 1)}${p(d.getDate())}-${p(d.getHours())}${p(d.getMinutes())}${p(d.getSeconds())}${ms}`
 }
 
 /** Build the full destination path for an export file. Defaults to `EXPORT_BASE_DIR`. */

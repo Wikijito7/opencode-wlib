@@ -105,9 +105,9 @@ export function ExportResultOverlay(props: ExportResultOverlayProps): JSX.Elemen
             justifyContent="center"
             paddingTop={1}
             paddingBottom={1}
-            backgroundColor={props.focus === 1 ? props.primary : undefined}
+            backgroundColor={!props.error && props.focus === 1 ? props.primary : undefined}
           >
-            <text fg={props.focus === 1 ? props.selectedText : props.muted}>Open</text>
+            <text fg={!props.error && props.focus === 1 ? props.selectedText : props.muted}>Open</text>
           </box>
         </box>
       </box>

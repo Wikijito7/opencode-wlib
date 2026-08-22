@@ -77,6 +77,11 @@ export function createExportController(api: TuiPluginApi, exportable: Exportable
   function close() {
     setShowExport(false)
     setShowResult(false)
+    setStep("format")
+    setDestSel(0)
+    setResultFocus(0)
+    setResultPath(null)
+    setResultError(false)
   }
 
   async function doClipboard() {
@@ -120,6 +125,7 @@ export function createExportController(api: TuiPluginApi, exportable: Exportable
   }
 
   function handleKey(key: string): boolean {
+    if (!showExport() && !showResult()) return false
     if (step() === "format") {
       const action = exportKeyAction(key, true)
       switch (action) {
@@ -142,11 +148,11 @@ export function createExportController(api: TuiPluginApi, exportable: Exportable
     }
 
     if (step() === "destination") {
-      if (key === "up" || key === "k") {
+      if (key === "up") {
         setDestSel(cycleExportIndex(destSel(), -1, 2))
         return true
       }
-      if (key === "down" || key === "j") {
+      if (key === "down") {
         setDestSel(cycleExportIndex(destSel(), 1, 2))
         return true
       }
@@ -167,11 +173,16 @@ export function createExportController(api: TuiPluginApi, exportable: Exportable
     }
 
     if (step() === "result") {
-      if (key === "left" || key === "h") {
+      if (resultError()) {
+        // No file was written: only allow closing; never focus/activate Open.
+        if (key === "escape" || key === "enter" || key === "o") { close(); return true }
+        return true // swallow other keys (modal); Open cannot be reached
+      }
+      if (key === "left") {
         setResultFocus(0)
         return true
       }
-      if (key === "right" || key === "l") {
+      if (key === "right") {
         setResultFocus(1)
         return true
       }

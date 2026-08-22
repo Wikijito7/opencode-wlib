@@ -36,6 +36,12 @@ export async function openFolder(dir: string): Promise<boolean> {
   if (!cmd) return false
   try {
     const child = spawn(cmd.cmd, cmd.args, { stdio: "ignore", detached: true })
+    // Missing executables surface as an 'error' event (e.g. ENOENT) rather than a
+    // synchronous throw. Attach a best-effort listener so the host is not crashed
+    // by an unhandled error. Guard on `on` so mocks without it (tests) don't throw.
+    if (typeof (child as any).on === "function") {
+      ;(child as any).on("error", () => { /* best-effort: missing command, ignore */ })
+    }
     child.unref()
     return true
   } catch {
