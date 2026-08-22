@@ -1,5 +1,5 @@
 import { describe, expect, it } from "bun:test"
-import { cycleExportIndex, exportKeyAction } from "./export-state"
+import { cycleExportIndex, exportKeyAction } from "../src/core/export-state"
 
 describe("exportKeyAction", () => {
   it('returns "none" for any key when the overlay is closed', () => {

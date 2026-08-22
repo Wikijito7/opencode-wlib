@@ -8,7 +8,7 @@
  * (the only pure/testable module — `@opentui/solid` is only resolvable
  * inside the opencode TUI host).
  *
- * NOTE: no `export … from "./dialog-fit"` re-exports — the plugin runtime
+ * NOTE: no `export … from "../core/dialog-fit"` re-exports — the plugin runtime
  * transpiler drops them and the names end up undefined. Import directly.
  * Also do not add a sibling `dialog.ts` — the host resolver may pick
  * `dialog.tsx` for `./wlib/dialog` imports and named exports would break.
@@ -16,10 +16,10 @@
 
 import { createEffect, createSignal, onMount, onCleanup } from "solid-js"
 import type { TuiPluginApi } from "@opencode-ai/plugin/tui"
-import { resolveDialogFit } from "./dialog-fit"
-import type { DialogDesired, DialogFit, DialogSize } from "./dialog-fit"
-import type { ThemeColorValue } from "./theme"
-import { createLog } from "./log"
+import { resolveDialogFit } from "../core/dialog-fit"
+import type { DialogDesired, DialogFit, DialogSize } from "../core/dialog-fit"
+import type { ThemeColorValue } from "../core/theme"
+import { createLog } from "../core/log"
 
 // Debug logging for dialog sizing — gated by the OPENCODE_WLIB_DEBUG env var.
 const dlog = createLog({ fileName: "log_wlib_dialog_sizing.log" }).log

@@ -13,7 +13,7 @@
  */
 
 import { Show, type JSX } from "solid-js"
-import type { ThemeColorValue } from "./theme"
+import type { ThemeColorValue } from "../core/theme"
 
 export interface CopiedFlashProps {
   copied: boolean

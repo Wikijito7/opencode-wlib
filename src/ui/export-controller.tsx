@@ -18,15 +18,15 @@
 import { createEffect, createSignal, onCleanup, type JSX } from "solid-js"
 import { dirname } from "node:path"
 import type { TuiPluginApi } from "@opencode-ai/plugin/tui"
-import { formatToExtension, type Exportable } from "./export"
+import { formatToExtension, type Exportable } from "../core/export"
 import { ExportOverlay, type ExportOverlayOption } from "./export-overlay"
 import { ExportResultOverlay } from "./export-result-overlay"
-import { exportKeyAction, cycleExportIndex } from "./export-state"
-import { writeClipboard } from "./clipboard"
-import { exportFilePath, writeFile, timestamp, EXPORT_BASE_DIR } from "./file"
-import { openFolder } from "./open-folder"
-import { registerDialogKeyLayer } from "./keys"
-import { resolveThemeColors } from "./theme"
+import { exportKeyAction, cycleExportIndex } from "../core/export-state"
+import { writeClipboard } from "../core/clipboard"
+import { exportFilePath, writeFile, timestamp, EXPORT_BASE_DIR } from "../core/file"
+import { openFolder } from "../core/open-folder"
+import { registerDialogKeyLayer } from "../core/keys"
+import { resolveThemeColors } from "../core/theme"
 
 export interface ExportController {
   open(): void

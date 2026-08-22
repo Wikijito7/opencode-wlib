@@ -1,5 +1,5 @@
 import { describe, expect, it } from "bun:test"
-import { makeScrollState, type ScrollState } from "./scroll"
+import { makeScrollState, type ScrollState } from "../src/core/scroll"
 
 // Minimal Solid-like createSignal stand-in.
 function mockSignal<T>(initial: T): [() => T, (v: T) => void] {

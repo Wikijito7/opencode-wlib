@@ -2,7 +2,7 @@
 /**
  * opencode-wlib — shortcut help overlay.
  *
- * Renders `HelpRow`s (built by the pure `buildHelpRows` in `./help`) as an
+ * Renders `HelpRow`s (built by the pure `buildHelpRows` in `../core/help`) as an
  * absolutely-positioned popup that floats OVER the dialog content via
  * `position="absolute"` + a high `zIndex`. It pins exactly to the parent's
  * bounds using the `left`/`top`/`right`/`bottom` offsets supported by
@@ -11,8 +11,8 @@
  */
 
 import type { JSX } from "solid-js"
-import { buildFooter, type HelpRow } from "./help"
-import type { ThemeColorValue } from "./theme"
+import { buildFooter, type HelpRow } from "../core/help"
+import type { ThemeColorValue } from "../core/theme"
 
 export interface HelpOverlayProps {
   rows: HelpRow[]

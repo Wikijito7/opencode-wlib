@@ -1,5 +1,5 @@
 import { describe, expect, it } from "bun:test"
-import { resolveThemeColors } from "./theme"
+import { resolveThemeColors } from "../src/core/theme"
 
 describe("resolveThemeColors", () => {
   it("uses the text/foreground convention", () => {

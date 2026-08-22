@@ -2,7 +2,7 @@ import { describe, expect, it } from "bun:test"
 import { existsSync, readFileSync, writeFileSync, unlinkSync, mkdtempSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
-import { estimateTokens, isTitleGenerator, readSystemSnapshot, writeSystemSnapshot } from "./system"
+import { estimateTokens, isTitleGenerator, readSystemSnapshot, writeSystemSnapshot } from "../src/core/system"
 
 function tmpFile(): string {
   const dir = mkdtempSync(join(tmpdir(), "wlib-test-"))
