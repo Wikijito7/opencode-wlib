@@ -87,8 +87,10 @@ export function createV2Host(context: Plugin.Context): WlibHost {
     }),
     subscribe: (listener) => {
       const handler = (width: number, height: number) => listener({ width, height })
-      context.renderer.on("resize", handler)
-      return () => context.renderer.off("resize", handler)
+      // `renderer` is optional on the v2 Context; mirror the v1 adapter so an
+      // absent renderer yields a safe no-op instead of throwing at init.
+      context.renderer?.on("resize", handler)
+      return () => context.renderer?.off("resize", handler)
     },
   }
 

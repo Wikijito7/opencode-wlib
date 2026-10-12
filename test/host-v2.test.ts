@@ -11,6 +11,8 @@ interface LayerCall {
 function makeContext(overrides: {
   renderer?: Partial<{ width: number; height: number; on: any; off: any }>
   theme?: unknown
+  /** Set false to model a v2 Context whose optional `renderer` is absent. */
+  withRenderer?: boolean
 } = {}) {
   const layers: LayerCall[] = []
   const dialogCalls = {
@@ -42,16 +44,19 @@ function makeContext(overrides: {
         },
       },
     },
-    renderer: {
-      width: overrides.renderer ? overrides.renderer.width : 100,
-      height: overrides.renderer ? overrides.renderer.height : 40,
-      on(event: string, listener: (w: number, h: number) => void) {
-        resizeHandlers.push([event, listener])
-      },
-      off(event: string, listener: (w: number, h: number) => void) {
-        offCalls.push([event, listener])
-      },
-    },
+    renderer:
+      overrides.withRenderer === false
+        ? undefined
+        : {
+            width: overrides.renderer ? overrides.renderer.width : 100,
+            height: overrides.renderer ? overrides.renderer.height : 40,
+            on(event: string, listener: (w: number, h: number) => void) {
+              resizeHandlers.push([event, listener])
+            },
+            off(event: string, listener: (w: number, h: number) => void) {
+              offCalls.push([event, listener])
+            },
+          },
     theme: overrides.theme,
   }
   return { context, layers, dialogCalls, resizeHandlers, offCalls }
@@ -392,6 +397,11 @@ describe("createV2Host", () => {
       expect(createV2Host(context as never).renderer.read()).toEqual({ width: 0, height: 0 })
     })
 
+    it("read defaults to 0/0 when the renderer is absent", () => {
+      const { context } = makeContext({ withRenderer: false })
+      expect(createV2Host(context as never).renderer.read()).toEqual({ width: 0, height: 0 })
+    })
+
     it("subscribe wires a resize adapter that unwraps (width, height)", () => {
       const { context, resizeHandlers } = makeContext()
       const seen: Array<{ width: number; height: number }> = []
@@ -411,6 +421,17 @@ describe("createV2Host", () => {
       expect(offCalls).toHaveLength(1)
       expect(offCalls[0][0]).toBe("resize")
       expect(offCalls[0][1]).toBe(resizeHandlers[0][1])
+    })
+
+    it("subscribe is a safe no-op when the renderer is absent", () => {
+      const { context, resizeHandlers, offCalls } = makeContext({ withRenderer: false })
+      const unsubscribe = createV2Host(context as never).renderer.subscribe(() => {})
+      // No renderer to attach to — nothing registered, and the returned
+      // unsubscriber must be callable without throwing.
+      expect(resizeHandlers).toHaveLength(0)
+      expect(typeof unsubscribe).toBe("function")
+      expect(() => unsubscribe()).not.toThrow()
+      expect(offCalls).toHaveLength(0)
     })
   })
 
