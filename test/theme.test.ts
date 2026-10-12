@@ -1,5 +1,5 @@
 import { describe, expect, it } from "bun:test"
-import { resolveThemeColors } from "../src/core/theme"
+import { resolveThemeColors, resolveSemanticTheme, THEME_DEFAULTS } from "../src/core/theme"
 
 describe("resolveThemeColors", () => {
   it("uses the text/foreground convention", () => {
@@ -107,3 +107,121 @@ describe("resolveThemeColors", () => {
     expect(palette.primary).toBe(rgba)
   })
 })
+
+// ─── resolveSemanticTheme (v2 ResolvedTheme tokens) ──────────────────────────
+
+describe("THEME_DEFAULTS", () => {
+  it("exposes the shared fallback palette", () => {
+    expect(THEME_DEFAULTS).toEqual({
+      fg: "#ffffff",
+      muted: "#888888",
+      red: "#ef4444",
+      primary: "#4f46e5",
+      background: "#000000",
+      panel: "#000000",
+    })
+  })
+})
+
+describe("resolveSemanticTheme", () => {
+  it("maps the v2 semantic tokens onto the palette", () => {
+    const palette = resolveSemanticTheme({
+      text: {
+        base: "#aaaaaa",
+        muted: "#bbbbbb",
+        action: { primary: { base: "#c0c0c0" } },
+        feedback: { error: { base: "#ff0000" } },
+      },
+      background: {
+        base: "#010101",
+        raised: { high: "#020202" },
+        action: { primary: { base: "#4f46e5" } },
+      },
+    })
+
+    expect(palette).toEqual({
+      fg: "#aaaaaa",
+      muted: "#bbbbbb",
+      red: "#ff0000",
+      primary: "#4f46e5",
+      selectedText: "#c0c0c0",
+      background: "#010101",
+      panel: "#020202",
+    })
+  })
+
+  it("prefers background.raised.high for the panel", () => {
+    expect(
+      resolveSemanticTheme({ background: { raised: { high: "#highhh", base: "#baseee" } } }).panel,
+    ).toBe("#highhh")
+  })
+
+  it("falls back to background.raised.base when high is missing", () => {
+    expect(
+      resolveSemanticTheme({ background: { raised: { base: "#baseee" } } }).panel,
+    ).toBe("#baseee")
+  })
+
+  it("falls back to defaults for an empty/absent theme", () => {
+    expect(resolveSemanticTheme({})).toEqual({
+      fg: "#ffffff",
+      muted: "#888888",
+      red: "#ef4444",
+      primary: "#4f46e5",
+      selectedText: undefined,
+      background: "#000000",
+      panel: "#000000",
+    })
+    expect(resolveSemanticTheme(null).fg).toBe("#ffffff")
+    expect(resolveSemanticTheme(undefined).background).toBe("#000000")
+  })
+
+  it("returns selectedText undefined when the token is absent", () => {
+    expect(resolveSemanticTheme({ text: { base: "#fff" } }).selectedText).toBeUndefined()
+  })
+
+  it("passes RGBA objects through untouched (no string coercion)", () => {
+    const fg = { r: 0.9, g: 0.4, b: 0.1, a: 1 }
+    const muted = { r: 0.2, g: 0.2, b: 0.2, a: 1 }
+    const red = { r: 1, g: 0, b: 0, a: 1 }
+    const primary = { r: 0.3, g: 0.2, b: 0.9, a: 1 }
+    const selectedText = { r: 1, g: 1, b: 1, a: 1 }
+    const background = { r: 0, g: 0, b: 0, a: 1 }
+    const panel = { r: 0.1, g: 0.1, b: 0.1, a: 1 }
+
+    const palette = resolveSemanticTheme({
+      text: {
+        base: fg,
+        muted,
+        action: { primary: { base: selectedText } },
+        feedback: { error: { base: red } },
+      },
+      background: {
+        base: background,
+        raised: { high: panel },
+        action: { primary: { base: primary } },
+      },
+    })
+
+    expect(palette.fg).toBe(fg)
+    expect(palette.muted).toBe(muted)
+    expect(palette.red).toBe(red)
+    expect(palette.primary).toBe(primary)
+    expect(palette.selectedText).toBe(selectedText)
+    expect(palette.background).toBe(background)
+    expect(palette.panel).toBe(panel)
+  })
+
+  it("treats junk leaves as missing (numbers, null, empty strings)", () => {
+    const palette = resolveSemanticTheme({
+      text: { base: 0 as unknown, muted: null, feedback: { error: { base: "" } } },
+      background: { base: 3.14 as unknown, raised: { high: "" } },
+    })
+    expect(palette.fg).toBe("#ffffff")
+    expect(palette.muted).toBe("#888888")
+    expect(palette.red).toBe("#ef4444")
+    expect(palette.background).toBe("#000000")
+    expect(palette.panel).toBe("#000000")
+  })
+})
+

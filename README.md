@@ -4,6 +4,48 @@ A custom middle-man library for all duplicated logic in opencode plugins.
 
 Wokis Lib centralises the behaviour shared across Wokis-branded opencode plugins (persona-injector, model-usage, and future ones) so the same logic is handled in a single, simple library instead of being copy-pasted per plugin. Distributed as a git submodule — no npm dependency.
 
+## Host adapters (v1 / v2)
+
+wlib talks to the host through a single, host-agnostic contract — `WlibHost`
+(`src/host/types.ts`) — instead of the raw plugin API. Each OpenCode plugin
+generation has its **own** adapter implementation; a runtime must use exactly
+one of them and never mix the two. The command/keymap, dialog, theme and
+renderer helpers all take a `WlibHost`.
+
+| Generation | Factory | Package | Status |
+| --- | --- | --- | --- |
+| OpenCode **v2** | `createV2Host(context)` (`src/host/v2.ts`) | `@opencode/plugin/tui` | **Supported (production)** |
+| OpenCode **v1** | `createV1Host(api)` (`src/host/v1.ts`) | `@opencode-ai/plugin/tui` | **Deprecated** — transition only |
+
+`WlibHost` exposes:
+
+| Member | Purpose |
+| --- | --- |
+| `kind` | `"v1" \| "v2"` — which generation the adapter targets. |
+| `registerCommand(options)` | Palette/slash command (+ optional key binding) → cleanup. |
+| `keymapLayer(config)` | Dialog-scoped key layer → cleanup (v2 cleanup is a no-op; disposal is owned by the reactive computation). |
+| `dialog` | `show(render, onClose?)`, `set({ size, centered? })`, `clear()`. |
+| `renderer` | `read()` → `{ width, height }`; `subscribe(listener)` → unsubscribe. |
+| `theme()` | Semantic palette (`fg`, `muted`, `red`, `primary`, `selectedText`, `background`, `panel`); RGBA values preserved. |
+
+Create the host once (v2), then pass it to every helper:
+
+```tsx
+import { Plugin } from "@opencode/plugin/tui"
+import { createV2Host } from "./wlib/src/host/v2"
+import { registerSlashCommand } from "./wlib/src/core/command"
+import { DialogShell } from "./wlib/src/ui/dialog"
+
+export default Plugin.define({
+  id: "my.plugin",
+  setup(context) {
+    const host = createV2Host(context)
+    const cleanup = registerSlashCommand(host, { name: "my.open", title: "Open", slashName: "my", run: () => {} })
+    return cleanup
+  },
+})
+```
+
 ## Modules
 
 ### `system` — system prompt snapshot contract
@@ -51,15 +93,20 @@ Solid-agnostic scroll state (`makeScrollState(createSignal)`) tracking overflow/
 
 ### `keys` — dialog key layer
 
-Typed wrapper over `api.keymap.registerLayer` for dialog-scoped key layers (bindings + commands) with a cleanup function.
+Host-agnostic wrapper for dialog-scoped key layers (bindings + commands). The
+host adapter registers them through the active host's keymap API (v1
+`keymap.registerLayer`, v2 `keymap.layer`).
 
-**API:** `registerDialogKeyLayer(api, { bindings, commands })` → cleanup.
+**API:** `registerDialogKeyLayer(host, { bindings, commands, priority? })` → cleanup.
 
 ### `theme` — normalized theme palette
 
-OpenCode themes expose colors under different property names across plugin code (`text` vs `foreground`, `textMuted` vs `muted`, `error` vs `red`). This helper normalizes them into one typed palette so dialogs stop drifting.
+Two resolvers feed the same `ThemePalette`, so dialogs stop drifting:
 
-**API:** `resolveThemeColors(theme, fallbacks?)` → `{ fg, muted, red, primary, selectedText }`.
+- `resolveSemanticTheme(theme)` — **v2**: maps `ResolvedTheme` semantic tokens (`text.base`, `text.muted`, `text.feedback.error.base`, `background.action.primary.base`, `text.action.primary.base`, `background.base`, `background.raised.high`). RGBA values pass through untouched.
+- `resolveThemeColors(theme, fallbacks?)` — **v1 / loose**: normalizes drifting property names (`text`/`foreground`, `textMuted`/`muted`, `error`/`red`).
+
+**API:** `resolveSemanticTheme(theme)` / `resolveThemeColors(theme, fallbacks?)` → `{ fg, muted, red, primary, selectedText, background, panel }`.
 
 ### `log` — unified debug logging
 
@@ -75,9 +122,11 @@ Prevents out-of-order async responses from clobbering newer data.
 
 ### `command` — palette slash commands
 
-Every plugin registers the same shape: a `keymap.registerLayer` with a palette command (`category: "Plugin"`, `namespace: "palette"`, `slashName`) plus an optional key binding.
+Every plugin registers the same shape: a palette command (`category: "Plugin"`
+in v1 / `group: "Plugin"` + `palette: true` in v2, with slash completion) plus
+an optional key binding. The host adapter maps the fields to the active host.
 
-**API:** `registerSlashCommand(api, { name, title, slashName, key?, run })` → cleanup.
+**API:** `registerSlashCommand(host, { name, title, slashName, key?, run })` → cleanup.
 
 ### `dialog` — responsive dialogs
 
@@ -87,8 +136,8 @@ Desired size/height with graceful fallback: the dialog picks the largest width t
 - `resolveDialogSize(terminalWidth, desired?)` → largest tier ≤ desired that fits (floor: `medium`)
 - `resolveDialogMaxHeight(terminalHeight, desired?, chrome?)` → `max(8, min(desired, ⌊0.75·H⌋ − chrome))` (chrome = title/indicators/footer rows, default 8)
 - `resolveDialogFit(terminal, desired?)` → `{ size, maxHeight }` (pure — test this; lives in `dialog-fit.ts`)
-- `useDialogSizing(desired?)` → reactive `{ size, maxHeight }` from the host terminal dimensions (host-only import — keep out of unit tests)
-- `<DialogShell title subtitle fg muted scroll footer desired onSizeChange>` → the common dialog frame; applies the responsive sizing automatically (pass `onSizeChange` → `api.ui.dialog.setSize` to keep the host in sync)
+- `useDialogSizing(host, desired?)` → reactive `{ size, maxHeight }` from the host adapter's terminal dimensions (host-only import — keep out of unit tests)
+- `<DialogShell host title subtitle fg muted scroll footer desired onSizeChange>` → the common dialog frame; applies the responsive sizing automatically and keeps the host dialog in sync via `host.dialog.set({ size })` (the optional `onSizeChange` is a notification hook)
 
 ### `export` — export pipeline (core + UI)
 
@@ -123,7 +172,7 @@ A reusable export flow shared by every plugin that needs to dump data (usage, an
 
 **Open folder (`open-folder`, core):** `resolveOpenFolderCommand(platform, dir)` (pure) → `{ cmd, args } \| null` for `open`/`xdg-open`/`explorer`; `openFolder(dir)` → `Promise<boolean>` spawns detached, ignores result.
 
-**Controller (`export-controller`, UI):** `createExportController(api, exportable, opts)` → `ExportController`, created inside a Solid owner (dialog render). Owns the format → destination → result state machine, a priority-2 key layer, clipboard/disk writes, and the "copied!" flash.
+**Controller (`export-controller`, UI):** `createExportController(host, exportable, opts)` → `ExportController`, created inside a Solid owner (dialog render). Owns the format → destination → result state machine, a priority-2 key layer (registered through the host adapter), clipboard/disk writes, and the "copied!" flash.
 
 - `ExportControllerOptions`: `{ name: string, exportDir?: string }`
 - `ExportController`: `open()`, `handleKey(key) → boolean`, `renderOverlay() → JSX.Element | null`, `renderResultOverlay() → JSX.Element | null`, `copiedFlash() → boolean`, `onCopied(listener) → cleanup`
@@ -168,6 +217,9 @@ git commit -m "chore: bump opencode-wlib"
 Import from plugins:
 
 ```ts
+// v2 host adapter (create once from the plugin context)
+import { createV2Host } from "./wlib/src/host/v2"
+
 // persona-injector-server.ts (server side — system snapshot writer)
 import { writeSystemSnapshot, isTitleGenerator } from "./persona-injector/wlib/src/core/system"
 
@@ -176,8 +228,9 @@ import { readSystemSnapshot } from "./wlib/src/core/system"
 
 // any dialog
 import { makeScrollState } from "./wlib/src/core/scroll"
+import { registerSlashCommand } from "./wlib/src/core/command"
 import { registerDialogKeyLayer } from "./wlib/src/core/keys"
-import { resolveThemeColors } from "./wlib/src/core/theme"
+import { resolveSemanticTheme } from "./wlib/src/core/theme"
 import { DialogShell } from "./wlib/src/ui/dialog"
 ```
 
@@ -186,6 +239,11 @@ import { DialogShell } from "./wlib/src/ui/dialog"
 ```bash
 bun test
 ```
+
+## v2 migration
+
+The library targets OpenCode **2.0.27+**. See [MIGRATION.md](./MIGRATION.md) for
+the v1 → v2 import/API mapping and the coordinated consumer migration order.
 
 ## License
 

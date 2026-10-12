@@ -2,13 +2,13 @@
 /**
  * opencode-wlib — reusable export controller.
  *
- * Host-agnostic controller that owns the export flow state machine: the
- * format step, the destination step (clipboard vs file), the "copied!" flash,
- * and the file-write result popup. It registers a priority-2 key layer, writes
- * to the clipboard or disk, and exposes overlay renderers. Host plugins call
- * `renderOverlay()` for the format/destination popup, `renderResultOverlay()`
- * for the file-save result popup, and `copiedFlash()`/`onCopied` to render
- * the footer flash.
+ * Host-agnostic controller (driven by a `WlibHost` adapter) that owns the
+ * export flow state machine: the format step, the destination step (clipboard
+ * vs file), the "copied!" flash, and the file-write result popup. It registers
+ * a priority-2 key layer through the adapter, writes to the clipboard or disk,
+ * and exposes overlay renderers. Host plugins call `renderOverlay()` for the
+ * format/destination popup, `renderResultOverlay()` for the file-save result
+ * popup, and `copiedFlash()`/`onCopied` to render the footer flash.
  *
  * Must be created inside a Solid owner (i.e. from within a dialog render)
  * because it registers a `createEffect` + `onCleanup` for the key layer
@@ -17,7 +17,7 @@
 
 import { createEffect, createSignal, onCleanup, type JSX } from "solid-js"
 import { dirname } from "node:path"
-import type { TuiPluginApi } from "@opencode-ai/plugin/tui"
+import type { WlibHost } from "../host/types"
 import { formatToExtension, type Exportable } from "../core/export"
 import { ExportOverlay, type ExportOverlayOption } from "./export-overlay"
 import { ExportResultOverlay } from "./export-result-overlay"
@@ -26,7 +26,6 @@ import { writeClipboard } from "../core/clipboard"
 import { exportFilePath, writeFile, timestamp, EXPORT_BASE_DIR } from "../core/file"
 import { openFolder } from "../core/open-folder"
 import { registerDialogKeyLayer } from "../core/keys"
-import { resolveThemeColors } from "../core/theme"
 
 export interface ExportController {
   open(): void
@@ -52,7 +51,7 @@ const DEST_OPTIONS: ExportOverlayOption[] = [
 
 type ExportStep = "format" | "destination" | "result"
 
-export function createExportController(api: TuiPluginApi, exportable: Exportable, opts: ExportControllerOptions): ExportController {
+export function createExportController(host: WlibHost, exportable: Exportable, opts: ExportControllerOptions): ExportController {
   const [showExport, setShowExport] = createSignal(false)
   const [showResult, setShowResult] = createSignal(false)
   const [step, setStep] = createSignal<ExportStep>("format")
@@ -65,7 +64,7 @@ export function createExportController(api: TuiPluginApi, exportable: Exportable
   let timeout: ReturnType<typeof setTimeout> | null = null
   const listeners = new Set<() => void>()
 
-  const colors = resolveThemeColors(api.theme?.current)
+  const colors = host.theme()
 
   function flashCopied() {
     setCopied(true)
@@ -207,7 +206,7 @@ export function createExportController(api: TuiPluginApi, exportable: Exportable
 
   createEffect(() => {
     if (!(showExport() || showResult())) return
-    const cleanup = registerDialogKeyLayer(api, {
+    const cleanup = registerDialogKeyLayer(host, {
       priority: 2,
       bindings: [
         { key: "up",     cmd: "export.up",     desc: "Previous" },

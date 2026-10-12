@@ -1,3 +1,95 @@
+# Migration guide: OpenCode v1 → v2 host API
+
+wlib now targets **OpenCode 2.0.27** (local reference:
+`/Users/cristianpc/.local/share/opencode/repos/github.com/anomalyco/opencode`,
+`package.json` → `"version": "2.0.27"`). The v1 plugin API
+(`@opencode-ai/plugin/tui`) is **not supported by v2**; a plugin must be ported.
+
+The library no longer takes the raw host API in its command/keymap, dialog,
+theme, or export-controller helpers. It takes a **`WlibHost` adapter** instead:
+
+| Generation | Factory | Import | Status |
+| --- | --- | --- | --- |
+| v2 | `createV2Host(context)` | `./wlib/src/host/v2` | **Supported (production)** |
+| v1 | `createV1Host(api)` | `./wlib/src/host/v1` | **Deprecated** — transition only |
+
+**Policy:** pick exactly one factory. Never mix `createV1Host` and
+`createV2Host` in the same runtime adapter. The v1 adapter is removed in
+opencode-wlib#5.
+
+## Function signature migration
+
+```ts
+// before (v1: raw TuiPluginApi)
+registerSlashCommand(api, opts)
+registerDialogKeyLayer(api, config)
+resolveThemeColors(api.theme.current)
+useDialogSizing(api, desired)
+createExportController(api, exportable, opts)
+// <DialogShell api={api} … />
+
+// after (v2: build the adapter once, then pass it)
+import { createV2Host } from "./wlib/src/host/v2"
+const host = createV2Host(context)
+
+registerSlashCommand(host, opts)
+registerDialogKeyLayer(host, config)
+host.theme()                        // or resolveSemanticTheme(context.theme)
+useDialogSizing(host, desired)
+createExportController(host, exportable, opts)
+// <DialogShell host={host} … />
+```
+
+`DialogShell` now applies the resolved width tier itself
+(`host.dialog.set({ size })`); `onSizeChange` is an optional notification hook,
+not the mechanism that keeps the host in sync.
+
+## Command field mapping (v1 → v2)
+
+The host adapter performs this mapping, but the shape is worth knowing:
+
+| wlib / v1 | v2 |
+| --- | --- |
+| command `name` | command `id` |
+| command `category` | command `group` |
+| `namespace: "palette"` | `palette: true` |
+| `slashName` | `slash: { name, aliases? }` |
+| inline binding `{ key, cmd, desc }` | `bind` on the command (+ `bindings` ID list for named commands) |
+| `keymap.registerLayer()` (returns cleanup) | `keymap.layer(factory)` (disposal owned by the reactive computation; wlib cleanup is a no-op) |
+| `enter` key name | `return` key name |
+
+## Theme migration (v2 semantic tokens)
+
+`resolveSemanticTheme(theme)` maps the v2 `ResolvedTheme` onto the same
+`ThemePalette`:
+
+| palette | v2 token |
+| --- | --- |
+| `fg` | `text.base` |
+| `muted` | `text.muted` |
+| `red` | `text.feedback.error.base` |
+| `primary` | `background.action.primary.base` |
+| `selectedText` | `text.action.primary.base` |
+| `background` | `background.base` |
+| `panel` | `background.raised.high` |
+
+RGBA values are passed through untouched — never string-coerced.
+
+## Coordinated consumer migration order
+
+wlib lands first; consumers bump their submodule only **after** the v2 wlib
+tests pass.
+
+1. **opencode-wlib** (this repo) — shared v2 contract.
+2. **opencode-persona-injector** (#34) — server hooks + TUI + system-snapshot writer.
+3. **opencode-model-usage** (#47) — server hooks, data layer, TUI dialogs, snapshot reader.
+4. **notifications** — scope/ownership TBD.
+
+Each consumer keeps its deprecated v1 entrypoints during the transition window
+and removes them in the follow-up cleanup issues (#35, #50; wlib #5).
+
+---
+
 # Migration guide: flat layout → `src/core` + `src/ui`
 
 This document explains how to migrate a plugin that consumes `opencode-wlib` as a

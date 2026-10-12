@@ -1,12 +1,14 @@
 /**
  * opencode-wlib — dialog-scoped key layer registration.
  *
- * Thin, typed wrapper over the TUI `keymap.registerLayer` used by every
- * dialog: bindings (up/down/enter/esc…) + commands, with a cleanup
- * function for `onCleanup`.
+ * Host-agnostic wrapper: a dialog declares its bindings (up/down/enter/esc…)
+ * and commands, and the host adapter registers them through whichever keymap
+ * API that generation exposes (v1 `keymap.registerLayer`, v2 `keymap.layer`).
+ * The returned cleanup is a no-op on v2, where the layer is disposed with the
+ * reactive computation that created it.
  */
 
-import type { TuiPluginApi } from "@opencode-ai/plugin/tui"
+import type { WlibHost } from "../host/types"
 
 export interface KeyBinding {
   key: string
@@ -24,20 +26,20 @@ export interface KeyLayerConfig {
   bindings: KeyBinding[]
   commands: KeyCommand[]
   /**
-   * Layer priority — forwarded to `api.keymap.registerLayer`. Higher
-   * priorities take precedence over lower ones. The TUI API defaults to 0
-   * when omitted.
+   * Layer priority. Higher priorities take precedence over lower ones. The
+   * host defaults to 0 when omitted.
    */
   priority?: number
 }
 
 /**
- * Register a dialog-scoped key layer on the TUI API.
- * Returns a cleanup function — call it in onCleanup to unregister.
+ * Register a dialog-scoped key layer through the host adapter.
+ * Returns a cleanup function — call it in onCleanup to unregister (a no-op
+ * on v2 hosts, where disposal is owned by the reactive computation).
  */
 export function registerDialogKeyLayer(
-  api: TuiPluginApi,
+  host: WlibHost,
   config: KeyLayerConfig,
 ): () => void {
-  return api.keymap.registerLayer(config)
+  return host.keymapLayer(config)
 }
