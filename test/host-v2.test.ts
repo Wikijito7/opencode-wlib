@@ -9,10 +9,8 @@ interface LayerCall {
 }
 
 function makeContext(overrides: {
-  renderer?: Partial<{ width: number; height: number; on: any; off: any }>
+  renderer?: Partial<{ terminalWidth: number; terminalHeight: number }>
   theme?: unknown
-  /** Set false to model a v2 Context whose optional `renderer` is absent. */
-  withRenderer?: boolean
 } = {}) {
   const layers: LayerCall[] = []
   const dialogCalls = {
@@ -20,8 +18,23 @@ function makeContext(overrides: {
     set: [] as unknown[],
     cleared: 0,
   }
-  const resizeHandlers: Array<[string, (w: number, h: number) => void]> = []
-  const offCalls: Array<[string, (w: number, h: number) => void]> = []
+  // `Context.renderer` is required in OpenCode 2.0.27 and its geometry is
+  // exposed as `terminalWidth`/`terminalHeight`. Its `resize` event carries no
+  // dimensions, so listeners take no arguments and must re-read the geometry.
+  const resizeHandlers: Array<[string, () => void]> = []
+  const offCalls: Array<[string, () => void]> = []
+
+  // Mutable so a test can change the live geometry between resize emissions.
+  const renderer = {
+    terminalWidth: overrides.renderer?.terminalWidth ?? 100,
+    terminalHeight: overrides.renderer?.terminalHeight ?? 40,
+    on(event: string, listener: () => void) {
+      resizeHandlers.push([event, listener])
+    },
+    off(event: string, listener: () => void) {
+      offCalls.push([event, listener])
+    },
+  }
 
   const context = {
     keymap: {
@@ -44,22 +57,10 @@ function makeContext(overrides: {
         },
       },
     },
-    renderer:
-      overrides.withRenderer === false
-        ? undefined
-        : {
-            width: overrides.renderer ? overrides.renderer.width : 100,
-            height: overrides.renderer ? overrides.renderer.height : 40,
-            on(event: string, listener: (w: number, h: number) => void) {
-              resizeHandlers.push([event, listener])
-            },
-            off(event: string, listener: (w: number, h: number) => void) {
-              offCalls.push([event, listener])
-            },
-          },
+    renderer,
     theme: overrides.theme,
   }
-  return { context, layers, dialogCalls, resizeHandlers, offCalls }
+  return { context, layers, dialogCalls, renderer, resizeHandlers, offCalls }
 }
 
 // ─── toV2Key ─────────────────────────────────────────────────────────────────
@@ -388,30 +389,37 @@ describe("createV2Host", () => {
 
   describe("renderer", () => {
     it("read returns the host's current dimensions", () => {
-      const { context } = makeContext({ renderer: { width: 120, height: 50 } })
+      const { context } = makeContext({ renderer: { terminalWidth: 120, terminalHeight: 50 } })
       expect(createV2Host(context as never).renderer.read()).toEqual({ width: 120, height: 50 })
     })
 
-    it("read defaults missing dimensions to 0", () => {
-      const { context } = makeContext({ renderer: { width: undefined, height: undefined } })
-      expect(createV2Host(context as never).renderer.read()).toEqual({ width: 0, height: 0 })
-    })
-
-    it("read defaults to 0/0 when the renderer is absent", () => {
-      const { context } = makeContext({ withRenderer: false })
-      expect(createV2Host(context as never).renderer.read()).toEqual({ width: 0, height: 0 })
-    })
-
-    it("subscribe wires a resize adapter that unwraps (width, height)", () => {
-      const { context, resizeHandlers } = makeContext()
+    it("subscribe wires a zero-argument resize handler that re-reads the live geometry", () => {
+      const { context, renderer, resizeHandlers } = makeContext()
       const seen: Array<{ width: number; height: number }> = []
       createV2Host(context as never).renderer.subscribe((d) => seen.push(d))
 
       expect(resizeHandlers).toHaveLength(1)
       const [event, handler] = resizeHandlers[0]
       expect(event).toBe("resize")
-      handler(140, 60)
+      // The 2.0.27 resize event carries no dimensions — the adapter's handler
+      // must be callable with no arguments and read the geometry itself.
+      expect(handler.length).toBe(0)
+
+      // Mutate the renderer BEFORE emitting; the adapter must report the
+      // freshly read geometry, not a stale/captured payload.
+      renderer.terminalWidth = 140
+      renderer.terminalHeight = 60
+      handler()
       expect(seen).toEqual([{ width: 140, height: 60 }])
+
+      // A later resize re-reads again rather than caching the first payload.
+      renderer.terminalWidth = 80
+      renderer.terminalHeight = 24
+      handler()
+      expect(seen).toEqual([
+        { width: 140, height: 60 },
+        { width: 80, height: 24 },
+      ])
     })
 
     it("the unsubscribe function detaches the same handler", () => {
@@ -421,17 +429,6 @@ describe("createV2Host", () => {
       expect(offCalls).toHaveLength(1)
       expect(offCalls[0][0]).toBe("resize")
       expect(offCalls[0][1]).toBe(resizeHandlers[0][1])
-    })
-
-    it("subscribe is a safe no-op when the renderer is absent", () => {
-      const { context, resizeHandlers, offCalls } = makeContext({ withRenderer: false })
-      const unsubscribe = createV2Host(context as never).renderer.subscribe(() => {})
-      // No renderer to attach to — nothing registered, and the returned
-      // unsubscriber must be callable without throwing.
-      expect(resizeHandlers).toHaveLength(0)
-      expect(typeof unsubscribe).toBe("function")
-      expect(() => unsubscribe()).not.toThrow()
-      expect(offCalls).toHaveLength(0)
     })
   })
 

@@ -80,17 +80,21 @@ export function toV2Layer(config: KeyLayerConfig): KeymapLayer {
 
 /** Create the v2 host adapter from a plugin `Context`. */
 export function createV2Host(context: Plugin.Context): WlibHost {
+  // `context.renderer` is required on the v2 Context (see `Plugin.Context`).
+  // `CliRenderer` exposes the live geometry as `terminalWidth`/`terminalHeight`;
+  // its `resize` event carries no width/height payload, so a listener must
+  // re-read the current geometry when it fires.
+  const readDimensions = (): HostDimensions => ({
+    width: context.renderer.terminalWidth,
+    height: context.renderer.terminalHeight,
+  })
+
   const renderer: HostRenderer = {
-    read: (): HostDimensions => ({
-      width: context.renderer?.width ?? 0,
-      height: context.renderer?.height ?? 0,
-    }),
+    read: readDimensions,
     subscribe: (listener) => {
-      const handler = (width: number, height: number) => listener({ width, height })
-      // `renderer` is optional on the v2 Context; mirror the v1 adapter so an
-      // absent renderer yields a safe no-op instead of throwing at init.
-      context.renderer?.on("resize", handler)
-      return () => context.renderer?.off("resize", handler)
+      const handler = () => listener(readDimensions())
+      context.renderer.on("resize", handler)
+      return () => context.renderer.off("resize", handler)
     },
   }
 
