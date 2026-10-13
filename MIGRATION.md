@@ -58,6 +58,19 @@ The host adapter performs this mapping, but the shape is worth knowing:
 | `keymap.registerLayer()` (returns cleanup) | `keymap.layer(factory)` (disposal owned by the reactive computation; wlib cleanup is a no-op) |
 | `enter` key name | `return` key name |
 
+## Keymap mode (v2-only)
+
+wlib plugin-global and dialog key layers are registered with **`mode: "global"`**
+on v2. OpenCode 2.0.27 defaults an omitted keymap mode to `base` and switches the
+active mode to `modal` whenever a dialog is open, so a layer left at the default
+is *inactive in modal/composer states* — its palette/slash entry and key bindings
+stop firing exactly when the dialog is visible. `registerSlashCommand` and
+`registerDialogKeyLayer` set `global` for you; pass `mode` explicitly to scope a
+layer to a single mode.
+
+`mode` is a v2-only field. The v1 adapter ignores it (v1 has no keymap-mode
+concept) and forwards every other layer field unchanged.
+
 ## Theme migration (v2 semantic tokens)
 
 `resolveSemanticTheme(theme)` maps the v2 `ResolvedTheme` onto the same

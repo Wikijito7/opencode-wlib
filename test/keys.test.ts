@@ -73,4 +73,19 @@ describe("registerDialogKeyLayer", () => {
     const { host, cleanup } = makeHostMock()
     expect(registerDialogKeyLayer(host, config)).toBe(cleanup)
   })
+
+  it("forwards a caller-supplied mode verbatim", () => {
+    const { host, layers } = makeHostMock()
+    registerDialogKeyLayer(host, { ...config, mode: "modal" })
+    expect(layers[0].mode).toBe("modal")
+  })
+
+  it("does not invent a mode when the caller omits one", () => {
+    // The global default is applied by the v2 host adapter, not here, so a
+    // mode-less config reaches the host without a `mode` key.
+    const { host, layers } = makeHostMock()
+    registerDialogKeyLayer(host, { bindings: config.bindings, commands: config.commands })
+    expect(layers[0].mode).toBeUndefined()
+    expect("mode" in layers[0]).toBe(false)
+  })
 })

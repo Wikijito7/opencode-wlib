@@ -54,6 +54,11 @@ function resolveKey(
  * share a `cmd` are merged into a comma-separated bind spec (v2 supports e.g.
  * `bind: "down,j,right,l"`). The layer's `bindings` ID list is unnecessary
  * because the commands own their bindings.
+ *
+ * `mode` defaults to `"global"`: on OpenCode 2.0.27 the active mode is `modal`
+ * while a dialog is open and the host layer default is `base`, so a layer left
+ * at that default is inactive exactly when its dialog is visible. An explicit
+ * `config.mode` still wins, preserving the caller's override.
  */
 export function toV2Layer(config: KeyLayerConfig): KeymapLayer {
   const keysByCmd = new Map<string, string[]>()
@@ -63,6 +68,7 @@ export function toV2Layer(config: KeyLayerConfig): KeymapLayer {
     keysByCmd.set(binding.cmd, keys)
   }
   return {
+    mode: config.mode ?? "global",
     ...(config.priority !== undefined ? { priority: config.priority } : {}),
     commands: config.commands.map((command) => {
       const keys = keysByCmd.get(command.name)
@@ -114,7 +120,11 @@ export function createV2Host(context: Plugin.Context): WlibHost {
       const binding = resolveKey(options)
       // `keymap.layer` is reactive: the layer belongs to the computation that
       // created it and is disposed automatically, so there is no cleanup handle.
+      // `mode: "global"` keeps palette/slash commands and their key bindings
+      // reachable in every input mode — without it the 2.0.27 host defaults the
+      // layer to `base`, which is inactive while a dialog pushes `modal`.
       context.keymap.layer(() => ({
+        mode: "global",
         commands: [
           {
             id: options.name,

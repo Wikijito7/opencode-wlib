@@ -166,6 +166,40 @@ describe("createV1Host", () => {
       expect(layers[0]).toBe(config)
       expect(returned).toBe(cleanup)
     })
+
+    it("strips the v2-only mode field and preserves the rest of the config", () => {
+      const { api, layers } = makeApi()
+      const withMode: KeyLayerConfig = { ...config, mode: "global" }
+      createV1Host(api).keymapLayer(withMode)
+
+      expect(layers).toHaveLength(1)
+      // v1 has no keymap-mode concept: the field must not reach registerLayer.
+      expect("mode" in layers[0]).toBe(false)
+      // Everything else is preserved unchanged.
+      expect(layers[0].priority).toBe(3)
+      expect(layers[0].bindings).toEqual([{ key: "up", cmd: "nav.up", desc: "Up" }])
+      expect(layers[0].commands.map((c) => c.name)).toEqual(["nav.up"])
+    })
+
+    it("does not mutate the caller's config when stripping mode", () => {
+      const { api } = makeApi()
+      const withMode: KeyLayerConfig = { ...config, mode: "modal" }
+      createV1Host(api).keymapLayer(withMode)
+      expect(withMode.mode).toBe("modal")
+    })
+
+    it("strips mode without affecting the identity fast-path for mode-less configs", () => {
+      const { api, layers } = makeApi()
+      const host = createV1Host(api)
+      // Mode-less first (identity), then a mode-carrying layer, then mode-less
+      // again: the two mode-less calls must remain the exact caller objects.
+      host.keymapLayer(config)
+      host.keymapLayer({ ...config, mode: "modal" })
+      host.keymapLayer(config)
+      expect(layers[0]).toBe(config)
+      expect("mode" in layers[1]).toBe(false)
+      expect(layers[2]).toBe(config)
+    })
   })
 
   describe("dialog", () => {

@@ -120,6 +120,27 @@ describe("toV2Layer", () => {
     expect(toV2Layer({ commands: [], bindings: [], priority: 0 }).priority).toBe(0)
   })
 
+  it("defaults mode to global when the caller does not set one", () => {
+    // 2.0.27 defaults a layer to `base`, which is inactive while a dialog
+    // pushes the active mode to `modal`; wlib must emit `global` explicitly.
+    expect(toV2Layer({ commands: [], bindings: [] }).mode).toBe("global")
+  })
+
+  it("emits global mode even for a non-empty dialog layer", () => {
+    const layer = toV2Layer({
+      commands: [{ name: "export.close", title: "Close", run: () => {} }],
+      bindings: [{ key: "escape", cmd: "export.close", desc: "Close" }],
+      priority: 1,
+    })
+    expect(layer.mode).toBe("global")
+  })
+
+  it("lets an explicit mode override the global default", () => {
+    expect(toV2Layer({ commands: [], bindings: [], mode: "modal" }).mode).toBe("modal")
+    expect(toV2Layer({ commands: [], bindings: [], mode: "base" }).mode).toBe("base")
+    expect(toV2Layer({ commands: [], bindings: [], mode: "composer" }).mode).toBe("composer")
+  })
+
   it("puts a single binding's key on the owning command as `bind`", () => {
     const layer = toV2Layer({
       commands: [{ name: "export.up", title: "Previous", run: () => {} }],
@@ -319,6 +340,21 @@ describe("createV2Host", () => {
       expect(typeof cleanup).toBe("function")
       expect(() => cleanup()).not.toThrow()
     })
+
+    it("registers the command layer with mode global by default", () => {
+      // The palette/slash entry and its binding must stay reachable while a
+      // dialog is open (2.0.27 pushes the active mode to `modal`).
+      const { context, layers } = makeContext()
+      createV2Host(context as never).registerCommand({
+        name: "analyze.show",
+        title: "Analyze Session Tokens",
+        slashName: "analyze",
+        key: "ctrl+shift+a",
+        run: () => {},
+      })
+      const layer = layers[0].layer as { mode?: string }
+      expect(layer.mode).toBe("global")
+    })
   })
 
   describe("keymapLayer", () => {
@@ -350,6 +386,18 @@ describe("createV2Host", () => {
       const cleanup = createV2Host(context as never).keymapLayer(config)
       expect(typeof cleanup).toBe("function")
       expect(() => cleanup()).not.toThrow()
+    })
+
+    it("emits mode global by default", () => {
+      const { context, layers } = makeContext()
+      createV2Host(context as never).keymapLayer(config)
+      expect((layers[0].layer as { mode?: string }).mode).toBe("global")
+    })
+
+    it("honors a custom mode when the caller sets one", () => {
+      const { context, layers } = makeContext()
+      createV2Host(context as never).keymapLayer({ ...config, mode: "modal" })
+      expect((layers[0].layer as { mode?: string }).mode).toBe("modal")
     })
   })
 

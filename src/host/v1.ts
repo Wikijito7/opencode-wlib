@@ -115,7 +115,14 @@ export function createV1Host(api: V1HostApi): WlibHost {
           : [],
       })
     },
-    keymapLayer: (config: KeyLayerConfig) => api.keymap.registerLayer(config),
+    keymapLayer: (config: KeyLayerConfig) => {
+      // v1 has no keymap-mode concept. Pass the config through unchanged
+      // (identity preserved for the common, mode-less case) and drop the
+      // v2-only `mode` field only when a caller actually set one.
+      if (config.mode === undefined) return api.keymap.registerLayer(config)
+      const { mode: _mode, ...v1Config } = config
+      return api.keymap.registerLayer(v1Config)
+    },
     dialog,
     renderer,
     theme: (): ThemePalette => resolveThemeColors(api.theme?.current),

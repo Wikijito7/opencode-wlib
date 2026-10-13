@@ -97,7 +97,13 @@ Host-agnostic wrapper for dialog-scoped key layers (bindings + commands). The
 host adapter registers them through the active host's keymap API (v1
 `keymap.registerLayer`, v2 `keymap.layer`).
 
-**API:** `registerDialogKeyLayer(host, { bindings, commands, priority? })` → cleanup.
+**API:** `registerDialogKeyLayer(host, { bindings, commands, priority?, mode? })` → cleanup.
+
+On v2 the layer is registered with `mode: "global"` by default. On OpenCode
+2.0.27 the host defaults a layer to `base` while an open dialog pushes the
+active mode to `modal`, so without this the layer (and its key bindings) would
+be inactive exactly when the dialog is visible. Pass `mode` explicitly to scope
+a layer to one mode; the v1 adapter ignores it (v1 has no mode concept).
 
 ### `theme` — normalized theme palette
 
@@ -125,6 +131,9 @@ Prevents out-of-order async responses from clobbering newer data.
 Every plugin registers the same shape: a palette command (`category: "Plugin"`
 in v1 / `group: "Plugin"` + `palette: true` in v2, with slash completion) plus
 an optional key binding. The host adapter maps the fields to the active host.
+On v2 the command's layer is registered `mode: "global"` so the palette/slash
+entry and its binding stay reachable while a dialog is open (2.0.27 defaults a
+layer to `base`, inactive under the dialog's `modal` mode).
 
 **API:** `registerSlashCommand(host, { name, title, slashName, key?, run })` → cleanup.
 
