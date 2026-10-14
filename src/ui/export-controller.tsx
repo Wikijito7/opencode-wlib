@@ -6,16 +6,21 @@
  * export flow state machine: the format step, the destination step (clipboard
  * vs file), the "copied!" flash, and the file-write result popup. It registers
  * a priority-2 key layer through the adapter, writes to the clipboard or disk,
- * and exposes overlay renderers. Host plugins call `renderOverlay()` for the
- * format/destination popup, `renderResultOverlay()` for the file-save result
- * popup, and `copiedFlash()`/`onCopied` to render the footer flash.
+ * and exposes overlay renderers. Host plugins include `renderOverlay()` for the
+ * format/destination popup and `renderResultOverlay()` for the file-save result
+ * popup once in the dialog JSX, and call `copiedFlash()`/`onCopied` to render
+ * the footer flash. Each renderer returns a persistently mounted reactive
+ * `Show` (driven by the controller's `showExport`/`showResult` signals) so the
+ * overlay reacts to `open()`/`close()` even when the host evaluates the JSX
+ * expression only once — a bare `return null` from an opaque method does not
+ * establish a reactive dependency in that path.
  *
  * Must be created inside a Solid owner (i.e. from within a dialog render)
  * because it registers a `createEffect` + `onCleanup` for the key layer
  * and the flash timeout.
  */
 
-import { createEffect, createSignal, onCleanup, type JSX } from "solid-js"
+import { createEffect, createSignal, onCleanup, Show, type JSX } from "solid-js"
 import { dirname } from "node:path"
 import type { WlibHost } from "../host/types"
 import { formatToExtension, type Exportable } from "../core/export"
@@ -30,8 +35,8 @@ import { registerDialogKeyLayer } from "../core/keys"
 export interface ExportController {
   open(): void
   handleKey(key: string): boolean
-  renderOverlay(): JSX.Element | null
-  renderResultOverlay(): JSX.Element | null
+  renderOverlay(): JSX.Element
+  renderResultOverlay(): JSX.Element
   copiedFlash(): boolean
   onCopied(listener: () => void): () => void
 }
@@ -239,37 +244,42 @@ export function createExportController(host: WlibHost, exportable: Exportable, o
     }
   })
 
-  function renderOverlay(): JSX.Element | null {
-    if (!showExport()) return null
-    const isDest = step() === "destination"
+  function renderOverlay(): JSX.Element {
     return (
-      <ExportOverlay
-        title={isDest ? "Export to" : "Export"}
-        formats={isDest ? DEST_OPTIONS : exportable.formats}
-        selectedIndex={isDest ? destSel() : exportSel()}
-        footer={isDest ? "↑↓ choose · enter confirm · esc back" : "↑↓ choose · enter continue"}
-        fg={colors.fg}
-        muted={colors.muted}
-        primary={colors.primary}
-        selectedText={colors.selectedText}
-        bg={colors.panel}
-      />
+      <Show when={showExport()}>
+        {(_) => (
+          <ExportOverlay
+            title={step() === "destination" ? "Export to" : "Export"}
+            formats={step() === "destination" ? DEST_OPTIONS : exportable.formats}
+            selectedIndex={step() === "destination" ? destSel() : exportSel()}
+            footer={step() === "destination" ? "↑↓ choose · enter confirm · esc back" : "↑↓ choose · enter continue"}
+            fg={colors.fg}
+            muted={colors.muted}
+            primary={colors.primary}
+            selectedText={colors.selectedText}
+            bg={colors.panel}
+          />
+        )}
+      </Show>
     )
   }
 
-  function renderResultOverlay(): JSX.Element | null {
-    if (!showResult()) return null
+  function renderResultOverlay(): JSX.Element {
     return (
-      <ExportResultOverlay
-        path={resultPath()}
-        error={resultError()}
-        focus={resultFocus()}
-        fg={colors.fg}
-        muted={colors.muted}
-        primary={colors.primary}
-        selectedText={colors.selectedText}
-        bg={colors.panel}
-      />
+      <Show when={showResult()}>
+        {(_) => (
+          <ExportResultOverlay
+            path={resultPath()}
+            error={resultError()}
+            focus={resultFocus()}
+            fg={colors.fg}
+            muted={colors.muted}
+            primary={colors.primary}
+            selectedText={colors.selectedText}
+            bg={colors.panel}
+          />
+        )}
+      </Show>
     )
   }
 

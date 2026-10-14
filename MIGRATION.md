@@ -81,12 +81,30 @@ concept) and forwards every other layer field unchanged.
 | `fg` | `text.base` |
 | `muted` | `text.muted` |
 | `red` | `text.feedback.error.base` |
-| `primary` | `background.action.primary.base` |
-| `selectedText` | `text.action.primary.base` |
+| `primary` | `background.action.primary.focused` → `selected` → `.base` |
+| `selectedText` | `text.action.primary.focused` → `selected` → `.base` |
 | `background` | `background.base` |
-| `panel` | `background.raised.high` |
+| `panel` | `background.raised.high` → `background.raised.base` |
 
-RGBA values are passed through untouched — never string-coerced.
+Selection resolves from the **focused** state first: the default v2 theme
+leaves `background.action.primary.base` and `.selected` `transparent` and only
+paints the visible accent on `.focused`, so reading `.base` (the old mapping)
+produced an invisible selected chip and `copied!` feedback.
+
+**Raw vs resolved keys.** `context.theme` is an already-resolved `ResolvedTheme`,
+so its action-state keys drop the `$` sigil — `focused`, `selected`, `base`,
+`hovered`, `pressed`, `disabled` (the host's resolver strips it via
+`resolvedKey`). The `$focused`/`$selected` spelling exists only in the *raw*
+theme definitions a plugin authors, never in the resolved context. A resolver
+must read `.focused`/`.selected` from `context.theme`.
+
+A value of `"transparent"` (or a zero-alpha RGBA) is treated as **absent** for
+surface tokens, so the resolver falls through to `selected`, `base`, and finally
+the legacy `THEME_DEFAULTS` instead of painting nothing. The same rule applies
+to `selectedText`: a transparent selected-text token is *skipped* (ending at
+`undefined`) because zero-alpha text would be invisible — the consumer then
+falls back to its resting text color. Non-transparent RGBA objects are passed
+through by identity — never string-coerced.
 
 ## Coordinated consumer migration order
 

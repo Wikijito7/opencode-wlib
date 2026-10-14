@@ -55,18 +55,42 @@ export const THEME_DEFAULTS = {
  * so RGBA objects pass through untouched and the type tracks whatever the
  * host actually resolves, without importing the theme package. Only the
  * tokens wlib maps are declared.
+ *
+ * NOTE ON KEYS: `context.theme` is already-resolved, so its action states drop
+ * the `$` sigil — `focused`, `selected`, `base`, … (see `resolvedKey` in the
+ * host's theme resolver). The `$focused`/`$selected` spelling appears only in
+ * the *raw* theme definitions a plugin might author, never in the resolved
+ * context. This type models the resolved shape.
  */
 export interface SemanticThemeLike {
   readonly text?: {
     readonly base?: unknown
     readonly muted?: unknown
-    readonly action?: { readonly primary?: { readonly base?: unknown } }
+    readonly action?: {
+      readonly primary?: {
+        /** Resting text color on the primary action surface. */
+        readonly base?: unknown
+        /** Text color while the action is focused — the visible contrast text. */
+        readonly focused?: unknown
+        /** Text color while the action is selected. */
+        readonly selected?: unknown
+      }
+    }
     readonly feedback?: { readonly error?: { readonly base?: unknown } }
   }
   readonly background?: {
     readonly base?: unknown
     readonly raised?: { readonly base?: unknown; readonly high?: unknown; readonly max?: unknown }
-    readonly action?: { readonly primary?: { readonly base?: unknown } }
+    readonly action?: {
+      readonly primary?: {
+        /** Resting surface color; the default v2 theme sets this to `transparent`. */
+        readonly base?: unknown
+        /** Surface color while focused — the visible accent that paints a selected row. */
+        readonly focused?: unknown
+        /** Surface color while selected; often `transparent` in the default v2 theme. */
+        readonly selected?: unknown
+      }
+    }
   }
 }
 
@@ -79,6 +103,28 @@ function validColor(v: unknown): ThemeColorValue | undefined {
   if (typeof v === "string") return v.length > 0 ? v : undefined
   if (v !== null && typeof v === "object") return v as ThemeColorValue
   return undefined
+}
+
+/**
+ * True when a color is explicitly see-through: the literal `"transparent"`
+ * string, or an OpenCode `RGBA` whose alpha is zero. An RGBA without an
+ * `alpha`-bearing object shape (no `a`) is treated as opaque.
+ */
+function isTransparent(v: ThemeColorValue): boolean {
+  if (typeof v === "string") return v.toLowerCase() === "transparent"
+  return v.a === 0
+}
+
+/**
+ * Like {@link validColor}, but rejects see-through values. Used for the
+ * surface tokens (selection background, app background, panel) where a
+ * transparent value would render the element invisible rather than fall
+ * through to a usable default. Non-transparent RGBA objects are preserved
+ * by identity.
+ */
+function visibleColor(v: unknown): ThemeColorValue | undefined {
+  const c = validColor(v)
+  return c !== undefined && !isTransparent(c) ? c : undefined
 }
 
 /**
@@ -110,24 +156,48 @@ export function resolveThemeColors(
  * - `fg`          ← `text.base`
  * - `muted`       ← `text.muted`
  * - `red`         ← `text.feedback.error.base`
- * - `primary`     ← `background.action.primary.base` (selected-row background)
- * - `selectedText`← `text.action.primary.base` (text on the primary background)
+ * - `primary`     ← `background.action.primary.focused`, then `selected`,
+ *                   then `.base` (selected-row background). The default v2
+ *                   theme leaves `.base`/`selected` `transparent` and only
+ *                   paints the accent on `focused`, so focused wins.
+ * - `selectedText`← `text.action.primary.focused`, then `selected`, then
+ *                   `.base` (text on the primary background).
  * - `background`  ← `background.base`
- * - `panel`       ← `background.raised.high` (opaque dialog/popup surface)
+ * - `panel`       ← `background.raised.high`, then `background.raised.base`
+ *
+ * Resolved keys carry no `$` sigil (unlike the raw `$focused`/`$selected`
+ * definition keys), matching the host's `ResolvedTheme`.
+ *
+ * Transparent values (`"transparent"` or zero-alpha RGBA) are treated as absent
+ * so a theme cannot paint an invisible surface or label: for the selection
+ * background and app/panel surfaces a see-through value would render nothing,
+ * and for `selectedText` it would render invisible text — so a transparent
+ * selected-text token is *skipped* (falls through, ending at `undefined`)
+ * rather than preserved, leaving the consumer free to use its resting text
+ * color. Non-transparent RGBA objects are preserved by identity.
  */
 export function resolveSemanticTheme(
   theme: SemanticThemeLike | null | undefined,
 ): ThemePalette {
+  const actionBackground = theme?.background?.action?.primary
+  const actionText = theme?.text?.action?.primary
   return {
     fg: validColor(theme?.text?.base) ?? THEME_DEFAULTS.fg,
     muted: validColor(theme?.text?.muted) ?? THEME_DEFAULTS.muted,
     red: validColor(theme?.text?.feedback?.error?.base) ?? THEME_DEFAULTS.red,
-    primary: validColor(theme?.background?.action?.primary?.base) ?? THEME_DEFAULTS.primary,
-    selectedText: validColor(theme?.text?.action?.primary?.base),
-    background: validColor(theme?.background?.base) ?? THEME_DEFAULTS.background,
+    primary:
+      visibleColor(actionBackground?.focused) ??
+      visibleColor(actionBackground?.selected) ??
+      visibleColor(actionBackground?.base) ??
+      THEME_DEFAULTS.primary,
+    selectedText:
+      visibleColor(actionText?.focused) ??
+      visibleColor(actionText?.selected) ??
+      visibleColor(actionText?.base),
+    background: visibleColor(theme?.background?.base) ?? THEME_DEFAULTS.background,
     panel:
-      validColor(theme?.background?.raised?.high) ??
-      validColor(theme?.background?.raised?.base) ??
+      visibleColor(theme?.background?.raised?.high) ??
+      visibleColor(theme?.background?.raised?.base) ??
       THEME_DEFAULTS.panel,
   }
 }

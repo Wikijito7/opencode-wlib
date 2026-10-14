@@ -109,7 +109,7 @@ a layer to one mode; the v1 adapter ignores it (v1 has no mode concept).
 
 Two resolvers feed the same `ThemePalette`, so dialogs stop drifting:
 
-- `resolveSemanticTheme(theme)` — **v2**: maps `ResolvedTheme` semantic tokens (`text.base`, `text.muted`, `text.feedback.error.base`, `background.action.primary.base`, `text.action.primary.base`, `background.base`, `background.raised.high`). RGBA values pass through untouched.
+- `resolveSemanticTheme(theme)` — **v2**: maps the resolved `ResolvedTheme` (`context.theme`) semantic tokens (`text.base`, `text.muted`, `text.feedback.error.base`, `background.action.primary.focused`/`selected`/`.base`, `text.action.primary.focused`/`selected`/`.base`, `background.base`, `background.raised.high`). Resolved action states carry **no `$` sigil** — `focused`/`selected` here are the *resolved* keys, whereas the raw theme definitions a plugin authors spell them `$focused`/`$selected` (the host's resolver strips the `$`). Selection tokens resolve from the **focused** state first (then `selected`, then `base`) because the default v2 theme leaves the base/selected surface `transparent` and only paints the accent on focus. Transparent values (`"transparent"` or zero-alpha RGBA) are treated as absent for surfaces *and* for `selectedText` (zero-alpha text would be invisible), so a theme without a visible focused state cannot paint an invisible chip or label; RGBA values otherwise pass through untouched.
 - `resolveThemeColors(theme, fallbacks?)` — **v1 / loose**: normalizes drifting property names (`text`/`foreground`, `textMuted`/`muted`, `error`/`red`).
 
 **API:** `resolveSemanticTheme(theme)` / `resolveThemeColors(theme, fallbacks?)` → `{ fg, muted, red, primary, selectedText, background, panel }`.
@@ -183,8 +183,10 @@ A reusable export flow shared by every plugin that needs to dump data (usage, an
 
 **Controller (`export-controller`, UI):** `createExportController(host, exportable, opts)` → `ExportController`, created inside a Solid owner (dialog render). Owns the format → destination → result state machine, a priority-2 key layer (registered through the host adapter), clipboard/disk writes, and the "copied!" flash.
 
+`renderOverlay()`/`renderResultOverlay()` each return a persistently mounted `JSX.Element` (`<Show>` wrapper) driven by internal `showExport`/`showResult` signals — never `null`. Because the host renders the JSX expression once, a conditional `null` would establish no reactive dependency; keeping the `Show` mounted lets the overlay react to `open()`/`close()` regardless.
+
 - `ExportControllerOptions`: `{ name: string, exportDir?: string }`
-- `ExportController`: `open()`, `handleKey(key) → boolean`, `renderOverlay() → JSX.Element | null`, `renderResultOverlay() → JSX.Element | null`, `copiedFlash() → boolean`, `onCopied(listener) → cleanup`
+- `ExportController`: `open()`, `handleKey(key) → boolean`, `renderOverlay() → JSX.Element` (persistent `<Show>`, not nullable), `renderResultOverlay() → JSX.Element` (persistent `<Show>`, not nullable), `copiedFlash() → boolean`, `onCopied(listener) → cleanup`
 
 **Overlays (`export-overlay`, `export-result-overlay`, UI):** fully presentational popups (no key handling, no side effects). `ExportOverlay(props)` lists format/destination options (`ExportOverlayOption`, `ExportOverlayProps`); `ExportResultOverlay(props)` reports the saved path (or error) with `Close`/`Open` buttons (`ExportResultOverlayProps`).
 

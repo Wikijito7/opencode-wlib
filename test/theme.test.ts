@@ -106,6 +106,32 @@ describe("resolveThemeColors", () => {
     const palette = resolveThemeColors({ primary: rgba }, { primary: "#000000" })
     expect(palette.primary).toBe(rgba)
   })
+
+  // v1 is a loose resolver and must stay untouched by the v2 semantic changes:
+  // it neither reads `$focused`/`$selected` nor filters see-through colors.
+  it("stays unchanged: passes transparent strings and zero-alpha RGBA through verbatim", () => {
+    const zeroAlpha = { r: 0, g: 0, b: 0, a: 0 }
+    const palette = resolveThemeColors({
+      primary: "transparent",
+      background: zeroAlpha,
+      backgroundPanel: "TRANSPARENT",
+    })
+    expect(palette.primary).toBe("transparent")
+    expect(palette.background).toBe(zeroAlpha)
+    expect(palette.panel).toBe("TRANSPARENT")
+  })
+
+  // Raw definition data: a plugin-authored theme uses the `$focused`/`$selected`
+  // sigil within its nested `action.primary`. The v1 loose resolver must ignore
+  // these nested raw keys entirely and read only the flat `primary` slot.
+  it("stays unchanged: ignores raw nested $focused/$selected definition keys", () => {
+    const rawDefinition = {
+      primary: "#abcabc",
+      action: { primary: { $focused: "#deadbeef", $selected: "#cafe" } },
+    }
+    const palette = resolveThemeColors(rawDefinition)
+    expect(palette.primary).toBe("#abcabc")
+  })
 })
 
 // ─── resolveSemanticTheme (v2 ResolvedTheme tokens) ──────────────────────────
@@ -124,7 +150,7 @@ describe("THEME_DEFAULTS", () => {
 })
 
 describe("resolveSemanticTheme", () => {
-  it("maps the v2 semantic tokens onto the palette", () => {
+  it("maps the v2 semantic tokens onto the palette (base fallback)", () => {
     const palette = resolveSemanticTheme({
       text: {
         base: "#aaaaaa",
@@ -148,6 +174,90 @@ describe("resolveSemanticTheme", () => {
       background: "#010101",
       panel: "#020202",
     })
+  })
+
+  it("prefers the focused action tokens over selected and base (selected-row state)", () => {
+    const palette = resolveSemanticTheme({
+      text: { action: { primary: { focused: "#eeeeee", selected: "#dddddd", base: "#cccccc" } } },
+      background: { action: { primary: { focused: "#5f56f6", selected: "#4f46e5", base: "#333333" } } },
+    })
+    expect(palette.primary).toBe("#5f56f6")
+    expect(palette.selectedText).toBe("#eeeeee")
+  })
+
+  it("falls back to the selected token when focused is absent", () => {
+    const palette = resolveSemanticTheme({
+      text: { action: { primary: { selected: "#dddddd", base: "#cccccc" } } },
+      background: { action: { primary: { selected: "#4f46e5", base: "#333333" } } },
+    })
+    expect(palette.primary).toBe("#4f46e5")
+    expect(palette.selectedText).toBe("#dddddd")
+  })
+
+  it("falls back to .base when neither focused nor selected is set", () => {
+    const palette = resolveSemanticTheme({
+      text: { action: { primary: { base: "#cccccc" } } },
+      background: { action: { primary: { base: "#4f46e5" } } },
+    })
+    expect(palette.primary).toBe("#4f46e5")
+    expect(palette.selectedText).toBe("#cccccc")
+  })
+
+  it("ignores a transparent focused token and uses the next visible one", () => {
+    const palette = resolveSemanticTheme({
+      text: { action: { primary: { focused: "transparent", selected: "#dddddd" } } },
+      background: {
+        action: {
+          primary: { focused: "TRANSPARENT", selected: { r: 0, g: 0, b: 0, a: 0 }, base: "#4f46e5" },
+        },
+      },
+    })
+    // focused is transparent (case-insensitive) → selected is zero-alpha → base wins.
+    expect(palette.primary).toBe("#4f46e5")
+    expect(palette.selectedText).toBe("#dddddd")
+  })
+
+  it("falls back to the default accent when every action background is transparent", () => {
+    const zeroAlpha = { r: 0, g: 0, b: 0, a: 0 }
+    const palette = resolveSemanticTheme({
+      background: { action: { primary: { focused: zeroAlpha, selected: "transparent", base: zeroAlpha } } },
+    })
+    expect(palette.primary).toBe(THEME_DEFAULTS.primary)
+  })
+
+  it("ignores transparent app-background and panel surfaces and uses their defaults", () => {
+    const zeroAlpha = { r: 0, g: 0, b: 0, a: 0 }
+    const palette = resolveSemanticTheme({
+      background: { base: "transparent", raised: { high: zeroAlpha, base: "transparent" } },
+    })
+    expect(palette.background).toBe(THEME_DEFAULTS.background)
+    expect(palette.panel).toBe(THEME_DEFAULTS.panel)
+  })
+
+  it("maps selected text through .focused → .selected → .base, or undefined when all transparent", () => {
+    expect(resolveSemanticTheme({ text: { action: { primary: { focused: "#f" } } } }).selectedText).toBe("#f")
+    expect(resolveSemanticTheme({ text: { action: { primary: { selected: "#s" } } } }).selectedText).toBe("#s")
+    expect(resolveSemanticTheme({ text: { action: { primary: { base: "#b" } } } }).selectedText).toBe("#b")
+    expect(
+      resolveSemanticTheme({
+        text: {
+          action: {
+            primary: { focused: "transparent", selected: { r: 0, g: 0, b: 0, a: 0 }, base: "transparent" },
+          },
+        },
+      }).selectedText,
+    ).toBeUndefined()
+  })
+
+  it("preserves non-transparent RGBA action surfaces by identity (incl. no alpha)", () => {
+    const focusRgba = { r: 0.4, g: 0.1, b: 0.8, a: 1 }
+    const opaqueNoAlpha = { r: 0.3, g: 0.2, b: 0.9 }
+    const palette = resolveSemanticTheme({
+      text: { action: { primary: { focused: opaqueNoAlpha } } },
+      background: { action: { primary: { focused: focusRgba } } },
+    })
+    expect(palette.primary).toBe(focusRgba)
+    expect(palette.selectedText).toBe(opaqueNoAlpha)
   })
 
   it("prefers background.raised.high for the panel", () => {

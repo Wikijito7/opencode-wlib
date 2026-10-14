@@ -481,11 +481,20 @@ describe("createV2Host", () => {
   })
 
   describe("theme", () => {
-    it("resolves the v2 semantic tokens onto the palette", () => {
+    it("prefers the focused v2 action tokens over selected and base", () => {
       const { context } = makeContext({
         theme: {
-          text: { base: "#aaaaaa", muted: "#bbbbbb", feedback: { error: { base: "#cc0000" } }, action: { primary: { base: "#111111" } } },
-          background: { base: "#000000", raised: { high: "#222222" }, action: { primary: { base: "#4f46e5" } } },
+          text: {
+            base: "#aaaaaa",
+            muted: "#bbbbbb",
+            feedback: { error: { base: "#cc0000" } },
+            action: { primary: { focused: "#eeeeee", selected: "#dddddd", base: "#111111" } },
+          },
+          background: {
+            base: "#000000",
+            raised: { high: "#222222" },
+            action: { primary: { focused: "#5f56f6", selected: "#4f46e5", base: "#333333" } },
+          },
         },
       })
       const palette = createV2Host(context as never).theme()
@@ -493,18 +502,51 @@ describe("createV2Host", () => {
         fg: "#aaaaaa",
         muted: "#bbbbbb",
         red: "#cc0000",
-        primary: "#4f46e5",
-        selectedText: "#111111",
+        primary: "#5f56f6",
+        selectedText: "#eeeeee",
         background: "#000000",
         panel: "#222222",
       })
     })
 
-    it("preserves RGBA objects untouched", () => {
+    it("uses the selected action token when focused is absent", () => {
+      const { context } = makeContext({
+        theme: {
+          text: { action: { primary: { selected: "#dddddd" } } },
+          background: { action: { primary: { selected: "#4f46e5" } } },
+        },
+      })
+      const palette = createV2Host(context as never).theme()
+      expect(palette.primary).toBe("#4f46e5")
+      expect(palette.selectedText).toBe("#dddddd")
+    })
+
+    it("ignores transparent action tokens and keeps the default accent", () => {
+      const { context } = makeContext({
+        theme: {
+          text: { action: { primary: { focused: "transparent" } } },
+          background: {
+            action: { primary: { focused: "transparent", selected: { r: 0, g: 0, b: 0, a: 0 }, base: "transparent" } },
+          },
+        },
+      })
+      const palette = createV2Host(context as never).theme()
+      expect(palette.primary).toBe("#4f46e5")
+      expect(palette.selectedText).toBeUndefined()
+    })
+
+    it("preserves non-transparent RGBA action tokens untouched", () => {
       const rgba = { r: 0.5, g: 0.25, b: 0.75, a: 1 }
-      const { context } = makeContext({ theme: { text: { base: rgba } } })
+      const { context } = makeContext({
+        theme: {
+          text: { base: rgba, action: { primary: { focused: rgba } } },
+          background: { action: { primary: { focused: rgba } } },
+        },
+      })
       const palette = createV2Host(context as never).theme()
       expect(palette.fg).toBe(rgba)
+      expect(palette.primary).toBe(rgba)
+      expect(palette.selectedText).toBe(rgba)
     })
 
     it("falls back to defaults for a missing theme", () => {
