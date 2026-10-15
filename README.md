@@ -148,6 +148,54 @@ Desired size/height with graceful fallback: the dialog picks the largest width t
 - `useDialogSizing(host, desired?)` → reactive `{ size, maxHeight }` from the host adapter's terminal dimensions (host-only import — keep out of unit tests)
 - `<DialogShell host title subtitle fg muted scroll footer desired onSizeChange>` → the common dialog frame; applies the responsive sizing automatically and keeps the host dialog in sync via `host.dialog.set({ size })` (the optional `onSizeChange` is a notification hook)
 
+### `instance` / `owned-instance` — dialog-scoped stable instance (core + UI)
+
+A dialog's render callback re-runs whenever a signal read directly in its body
+changes. Creating a stateful controller inside it replaces the instance on every
+re-run and disposes its effects (the confirmed export-popup bug: the priority-2
+key layer dropped and the overlay rendered against a fresh, closed instance).
+These two modules keep one instance alive for the whole dialog.
+
+- `instance` (**core**, pure): `createInstanceSlot(factory, disposeInstance?)` →
+  `InstanceSlot<T>` with `created()`, `get()` (creates on first call; throws
+  after dispose), `dispose()` (runs the optional disposer once, idempotent).
+- `owned-instance` (**UI**): `createOwnedInstance(factory)` → `{ instance, dispose() }`.
+  Runs the factory exactly once inside a stable Solid `createRoot` owner and
+  returns the same `instance` across render-callback re-runs; effects/`onCleanup`
+  the factory registers belong to that root. Call `dispose()` from the dialog's
+  `onClose` (escape, replacement, close) so the controller's priority-2 key layer
+  and flash timeout are torn down exactly once.
+
+Owner guarantee: `createRoot` called with a dispose-taking callback creates a
+standalone owner that is **not** registered in the calling computation's `owned`
+list, so a re-run or teardown of the transient dialog render computation cannot
+dispose it — only the returned `dispose()` can (verified against Solid 1.9.12,
+`createRoot`/`cleanNode`).
+
+```tsx
+// Create BEFORE host.dialog.show (e.g. from the keymap command); it stays alive
+// until the dialog's onClose disposes it.
+const exporterOwner = createOwnedInstance(() =>
+  createExportController(host, exportable, { name: "usage" }),
+)
+const exporter = exporterOwner.instance
+
+host.dialog.show(() => {
+  // …render using exporter (same instance on every re-run)…
+}, () => {
+  exporterOwner.dispose()
+})
+```
+
+**API:**
+
+| Export | Kind | Description |
+|---|---|---|
+| `createInstanceSlot(factory, disposeInstance?)` | core | Create-once / dispose-once slot; `get()` throws after `dispose()`. |
+| `InstanceSlot<T>` | core | `{ created(): boolean, get(): T, dispose(): void }`. |
+| `createOwnedInstance(factory)` | UI | Factory-once value in a stable `createRoot` owner → `{ instance, dispose() }`. |
+| `OwnedInstance<T>` | UI | `{ readonly instance: T, dispose(): void }`. |
+
 ### `export` — export pipeline (core + UI)
 
 A reusable export flow shared by every plugin that needs to dump data (usage, analyze, …). The **contract and pure helpers live in core** (`export`, `export-state`, `file`, `open-folder`); the **SolidJS/TUI pieces live in UI** (`export-controller`, `export-overlay`, `export-result-overlay`). The actual serializers (`build(format)`) are implemented by the host plugin, NOT here.
@@ -181,7 +229,7 @@ A reusable export flow shared by every plugin that needs to dump data (usage, an
 
 **Open folder (`open-folder`, core):** `resolveOpenFolderCommand(platform, dir)` (pure) → `{ cmd, args } \| null` for `open`/`xdg-open`/`explorer`; `openFolder(dir)` → `Promise<boolean>` spawns detached, ignores result.
 
-**Controller (`export-controller`, UI):** `createExportController(host, exportable, opts)` → `ExportController`, created inside a Solid owner (dialog render). Owns the format → destination → result state machine, a priority-2 key layer (registered through the host adapter), clipboard/disk writes, and the "copied!" flash.
+**Controller (`export-controller`, UI):** `createExportController(host, exportable, opts)` → `ExportController`. Because it registers a `createEffect` (priority-2 key layer) and `onCleanup` (flash timeout), it must be owned by a stable Solid owner: create it **once** through `createOwnedInstance` (see above) and keep that instance for the whole dialog — creating it inside the render callback replaces it on every re-run. Owns the format → destination → result state machine, the priority-2 key layer (registered through the host adapter), clipboard/disk writes, and the "copied!" flash.
 
 `renderOverlay()`/`renderResultOverlay()` each return a persistently mounted `JSX.Element` (`<Show>` wrapper) driven by internal `showExport`/`showResult` signals — never `null`. Because the host renders the JSX expression once, a conditional `null` would establish no reactive dependency; keeping the `Show` mounted lets the overlay react to `open()`/`close()` regardless.
 
@@ -242,6 +290,7 @@ import { makeScrollState } from "./wlib/src/core/scroll"
 import { registerSlashCommand } from "./wlib/src/core/command"
 import { registerDialogKeyLayer } from "./wlib/src/core/keys"
 import { resolveSemanticTheme } from "./wlib/src/core/theme"
+import { createOwnedInstance } from "./wlib/src/ui/owned-instance"
 import { DialogShell } from "./wlib/src/ui/dialog"
 ```
 

@@ -44,6 +44,33 @@ createExportController(host, exportable, opts)
 (`host.dialog.set({ size })`); `onSizeChange` is an optional notification hook,
 not the mechanism that keeps the host in sync.
 
+## Export-controller lifetime (v2)
+
+The export controller registers a `createEffect` (its priority-2 key layer) and
+an `onCleanup` (the flash timeout), so it needs a **stable Solid owner**. A
+dialog's render callback re-runs on every signal read in its body, so creating
+the controller inside the callback replaces it on each re-run — dropping the old
+controller's key layer and rendering the overlay against a fresh, closed
+instance. Create it **once** with `createOwnedInstance` (before
+`host.dialog.show`, e.g. from the keymap command) and dispose that owner from the
+dialog's `onClose`:
+
+```ts
+import { createOwnedInstance } from "./wlib/src/ui/owned-instance"
+import { createExportController } from "./wlib/src/ui/export-controller"
+
+const exporterOwner = createOwnedInstance(() =>
+  createExportController(host, exportable, { name: "usage" }),
+)
+const exporter = exporterOwner.instance   // stable across render re-runs
+// …
+host.dialog.show(render, () => exporterOwner.dispose())
+```
+
+`createOwnedInstance` runs the factory inside a standalone `createRoot` owner
+that the transient render computation cannot dispose; only the returned
+`dispose()` tears it down (exactly once).
+
 ## Command field mapping (v1 → v2)
 
 The host adapter performs this mapping, but the shape is worth knowing:
@@ -169,7 +196,9 @@ paths.
 | `./wlib/export` | `./wlib/src/core/export` |
 | `./wlib/export-state` | `./wlib/src/core/export-state` |
 | `./wlib/help` | `./wlib/src/core/help` |
+| `./wlib/instance` | `./wlib/src/core/instance` |
 | `./wlib/dialog` | `./wlib/src/ui/dialog` |
+| `./wlib/owned-instance` | `./wlib/src/ui/owned-instance` |
 | `./wlib/copied-flash` | `./wlib/src/ui/copied-flash` |
 | `./wlib/export-controller` | `./wlib/src/ui/export-controller` |
 | `./wlib/export-overlay` | `./wlib/src/ui/export-overlay` |
