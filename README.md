@@ -156,32 +156,53 @@ re-run and disposes its effects (the confirmed export-popup bug: the priority-2
 key layer dropped and the overlay rendered against a fresh, closed instance).
 These two modules keep one instance alive for the whole dialog.
 
+Creation is **lazy**: the factory does not run at construction. The root is
+created on the first `get()`, so `get()` must be called from **inside the dialog
+render callback** — the export controller's `createEffect` reads
+`context.keymap.layer`, and the dialog's `Keymap.Provider` only exists inside
+that callback. A root created earlier (e.g. before `host.dialog.show`) captures
+an owner above the provider, the effect logs `Keymap.Provider is missing`, and
+the priority-2 layer never registers.
+
 - `instance` (**core**, pure): `createInstanceSlot(factory, disposeInstance?)` →
   `InstanceSlot<T>` with `created()`, `get()` (creates on first call; throws
   after dispose), `dispose()` (runs the optional disposer once, idempotent).
-- `owned-instance` (**UI**): `createOwnedInstance(factory)` → `{ instance, dispose() }`.
-  Runs the factory exactly once inside a stable Solid `createRoot` owner and
-  returns the same `instance` across render-callback re-runs; effects/`onCleanup`
-  the factory registers belong to that root. Call `dispose()` from the dialog's
-  `onClose` (escape, replacement, close) so the controller's priority-2 key layer
-  and flash timeout are torn down exactly once.
+- `owned-instance` (**UI**): `createOwnedInstance(factory)` → `{ get(), dispose() }`.
+  Runs the factory exactly once, on the first `get()`, inside a stable Solid
+  `createRoot` owner, and returns the same instance from `get()` across
+  render-callback re-runs; effects/`onCleanup` the factory registers belong to
+  that root. Call `dispose()` from the dialog's `onClose` (escape, replacement,
+  clear) so the controller's priority-2 key layer and flash timeout are torn down
+  exactly once. `dispose()` is idempotent, never runs the factory if `get()` was
+  never called, and a later `get()` throws.
 
 Owner guarantee: `createRoot` called with a dispose-taking callback creates a
 standalone owner that is **not** registered in the calling computation's `owned`
 list, so a re-run or teardown of the transient dialog render computation cannot
 dispose it — only the returned `dispose()` can (verified against Solid 1.9.12,
-`createRoot`/`cleanNode`).
+`createRoot`/`cleanNode`). Context (keymap provider, theme) is still inherited
+from the owner present at the first `get()`.
+
+`owned-instance` is a Solid-dependent UI module, so it ships as
+`src/ui/owned-instance.tsx` — **not** `.ts`. The OpenCode 2.0.27 TUI runtime only
+applies its Solid transform pass to JSX modules (`.tsx`/`.jsx`); a `.ts` file
+gets only the TypeScript pass. The `.tsx` extension is what keeps this module
+transformed like the rest of the UI layer instead of being loaded as plain
+TypeScript.
 
 ```tsx
-// Create BEFORE host.dialog.show (e.g. from the keymap command); it stays alive
-// until the dialog's onClose disposes it.
+// Construct the owner anywhere (e.g. from the keymap command); it does nothing
+// until the first get(), which must run inside the render callback so the root
+// inherits the dialog's Keymap.Provider context. It stays alive until the
+// dialog's onClose disposes it.
 const exporterOwner = createOwnedInstance(() =>
   createExportController(host, exportable, { name: "usage" }),
 )
-const exporter = exporterOwner.instance
+let exporter: ExportController
 
 host.dialog.show(() => {
-  // …render using exporter (same instance on every re-run)…
+  exporter = exporterOwner.get()   // same instance on every re-run
+  // …render using exporter…
 }, () => {
   exporterOwner.dispose()
 })
@@ -193,8 +214,8 @@ host.dialog.show(() => {
 |---|---|---|
 | `createInstanceSlot(factory, disposeInstance?)` | core | Create-once / dispose-once slot; `get()` throws after `dispose()`. |
 | `InstanceSlot<T>` | core | `{ created(): boolean, get(): T, dispose(): void }`. |
-| `createOwnedInstance(factory)` | UI | Factory-once value in a stable `createRoot` owner → `{ instance, dispose() }`. |
-| `OwnedInstance<T>` | UI | `{ readonly instance: T, dispose(): void }`. |
+| `createOwnedInstance(factory)` | UI | Lazy factory-once value in a stable `createRoot` owner → `{ get(), dispose() }`. |
+| `OwnedInstance<T>` | UI | `{ get(): T, dispose(): void }`. |
 
 ### `export` — export pipeline (core + UI)
 
@@ -229,7 +250,7 @@ A reusable export flow shared by every plugin that needs to dump data (usage, an
 
 **Open folder (`open-folder`, core):** `resolveOpenFolderCommand(platform, dir)` (pure) → `{ cmd, args } \| null` for `open`/`xdg-open`/`explorer`; `openFolder(dir)` → `Promise<boolean>` spawns detached, ignores result.
 
-**Controller (`export-controller`, UI):** `createExportController(host, exportable, opts)` → `ExportController`. Because it registers a `createEffect` (priority-2 key layer) and `onCleanup` (flash timeout), it must be owned by a stable Solid owner: create it **once** through `createOwnedInstance` (see above) and keep that instance for the whole dialog — creating it inside the render callback replaces it on every re-run. Owns the format → destination → result state machine, the priority-2 key layer (registered through the host adapter), clipboard/disk writes, and the "copied!" flash.
+**Controller (`export-controller`, UI):** `createExportController(host, exportable, opts)` → `ExportController`. Because it registers a `createEffect` (priority-2 key layer) and `onCleanup` (flash timeout), it must be owned by a stable Solid owner: wrap it in `createOwnedInstance` **once** and call `.get()` from inside the render callback (the owner keeps the same controller across re-runs) — rather than constructing the controller directly inside the callback, which replaces it on every re-run. Owns the format → destination → result state machine, the priority-2 key layer (registered through the host adapter), clipboard/disk writes, and the "copied!" flash.
 
 `renderOverlay()`/`renderResultOverlay()` each return a persistently mounted `JSX.Element` (`<Show>` wrapper) driven by internal `showExport`/`showResult` signals — never `null`. Because the host renders the JSX expression once, a conditional `null` would establish no reactive dependency; keeping the `Show` mounted lets the overlay react to `open()`/`close()` regardless.
 

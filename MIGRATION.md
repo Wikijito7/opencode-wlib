@@ -51,25 +51,39 @@ an `onCleanup` (the flash timeout), so it needs a **stable Solid owner**. A
 dialog's render callback re-runs on every signal read in its body, so creating
 the controller inside the callback replaces it on each re-run — dropping the old
 controller's key layer and rendering the overlay against a fresh, closed
-instance. Create it **once** with `createOwnedInstance` (before
-`host.dialog.show`, e.g. from the keymap command) and dispose that owner from the
-dialog's `onClose`:
+instance. Wrap the controller in `createOwnedInstance` (constructed anywhere,
+e.g. from the keymap command) and **call `.get()` from inside the render
+callback**; dispose that owner from the dialog's `onClose`:
 
 ```ts
 import { createOwnedInstance } from "./wlib/src/ui/owned-instance"
-import { createExportController } from "./wlib/src/ui/export-controller"
+import { createExportController, type ExportController } from "./wlib/src/ui/export-controller"
 
 const exporterOwner = createOwnedInstance(() =>
   createExportController(host, exportable, { name: "usage" }),
 )
-const exporter = exporterOwner.instance   // stable across render re-runs
-// …
-host.dialog.show(render, () => exporterOwner.dispose())
+let exporter: ExportController
+
+host.dialog.show(() => {
+  exporter = exporterOwner.get()   // stable across render re-runs
+  // …render…
+}, () => exporterOwner.dispose())
 ```
 
-`createOwnedInstance` runs the factory inside a standalone `createRoot` owner
-that the transient render computation cannot dispose; only the returned
-`dispose()` tears it down (exactly once).
+`get()` must run **inside** the render callback, not before it: it is what
+creates the standalone `createRoot` owner, and the root inherits the context of
+its call site. The export controller's `createEffect` reads
+`context.keymap.layer`, which the dialog only provides inside its render
+(`Keymap.Provider`); a root created before `host.dialog.show` captures an owner
+above the provider, the effect logs `Keymap.Provider is missing`, and the
+priority-2 layer never registers. Because the root is standalone, the transient
+render computation cannot dispose it; only the returned `dispose()` tears it
+down (exactly once, idempotently).
+
+The helper is imported from `./wlib/src/ui/owned-instance` and ships as
+`owned-instance.tsx`: a Solid-dependent module is `.tsx` so the OpenCode 2.0.27
+runtime transform processes it (the runtime applies its Solid pass only to JSX
+modules; a `.ts` file receives only the TypeScript pass).
 
 ## Command field mapping (v1 → v2)
 
