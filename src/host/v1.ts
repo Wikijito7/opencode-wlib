@@ -74,7 +74,7 @@ function resolveKey(
  * Create the deprecated v1 host adapter from a v1 `TuiPluginApi`.
  * @deprecated Use `createV2Host` from `./v2`.
  */
-export function createV1Host(api: V1HostApi): WlibHost {
+export function createV1Host(api: V1HostApi): WlibHost<ThemePalette> {
   const renderer: HostRenderer = {
     read: (): HostDimensions => ({
       width: api.renderer?.width ?? 0,

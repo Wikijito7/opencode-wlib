@@ -114,23 +114,31 @@ concept) and forwards every other layer field unchanged.
 
 ## Theme migration (v2 semantic tokens)
 
-`resolveSemanticTheme(theme)` maps the v2 `ResolvedTheme` onto the same
-`ThemePalette`:
+`resolveSemanticTheme(theme)` maps the v2 `ResolvedTheme` onto the v2-specific
+`SemanticThemePalette` — the legacy `ThemePalette` with `selectedText` narrowed
+to **required** (always visible). `createV2Host` returns
+`WlibHost<SemanticThemePalette>`; the v1 adapter keeps the base `ThemePalette`
+and optional `selectedText`:
 
 | palette | v2 token |
 | --- | --- |
-| `fg` | `text.base` |
+| `fg` | `text.base` (visible; a transparent `text.base` → `THEME_DEFAULTS.fg`) |
 | `muted` | `text.muted` |
 | `red` | `text.feedback.error.base` |
 | `primary` | `background.action.primary.focused` → `selected` → `.base` |
-| `selectedText` | `text.action.primary.focused` → `selected` → `.base` |
+| `selectedText` | `text.action.primary.focused` → `selected` → `.base` → `fg` |
 | `background` | `background.base` |
-| `panel` | `background.raised.high` → `background.raised.base` |
+| `panel` | `background.raised.base` → `background.raised.high` |
 
 Selection resolves from the **focused** state first: the default v2 theme
 leaves `background.action.primary.base` and `.selected` `transparent` and only
 paints the visible accent on `.focused`, so reading `.base` (the old mapping)
 produced an invisible selected chip and `copied!` feedback.
+
+`panel` resolves from `background.raised.base` first, then `background.raised.high`.
+`.base` wins for 1:1 overlay-surface parity with the shipped v1 plugin scheme:
+the v1→v2 theme migrator maps legacy `backgroundPanel` to resolved
+`background.raised.base`, while `.high` is a lighter menu surface.
 
 **Raw vs resolved keys.** `context.theme` is an already-resolved `ResolvedTheme`,
 so its action-state keys drop the `$` sigil — `focused`, `selected`, `base`,
@@ -142,10 +150,22 @@ must read `.focused`/`.selected` from `context.theme`.
 A value of `"transparent"` (or a zero-alpha RGBA) is treated as **absent** for
 surface tokens, so the resolver falls through to `selected`, `base`, and finally
 the legacy `THEME_DEFAULTS` instead of painting nothing. The same rule applies
-to `selectedText`: a transparent selected-text token is *skipped* (ending at
-`undefined`) because zero-alpha text would be invisible — the consumer then
-falls back to its resting text color. Non-transparent RGBA objects are passed
-through by identity — never string-coerced.
+to `selectedText`: a transparent selected-text token is *skipped* because
+zero-alpha text would be invisible. Unlike v1, the v2 resolver does **not** end
+at `undefined` — v2 chip and label consumers require visible text, so when all
+selection text states are absent or transparent `selectedText` falls back to the
+resolved `fg`. That `fg` fallback is itself visible: a transparent/zero-alpha
+`text.base` is skipped and resolves to `THEME_DEFAULTS.fg`, so the fallback can
+never inherit invisible text. The v1 loose resolver (`resolveThemeColors`) keeps
+its legacy behavior and may still expose `undefined`. Non-transparent RGBA
+objects are passed through by identity — never string-coerced.
+
+**Type change.** `resolveSemanticTheme` now returns `SemanticThemePalette`
+(`selectedText: ThemeColorValue`, required) instead of `ThemePalette`
+(`selectedText?: ThemeColorValue`). Because `SemanticThemePalette extends
+ThemePalette`, existing assignments to `ThemePalette` keep working, and
+`WlibHost<P extends ThemePalette = ThemePalette>` lets `createV2Host` expose the
+stronger type without breaking callers typed against the plain `WlibHost`.
 
 ## Coordinated consumer migration order
 

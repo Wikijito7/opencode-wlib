@@ -22,12 +22,34 @@ export interface ThemePalette {
   red: ThemeColorValue
   /** Selection/active background color. */
   primary: ThemeColorValue
-  /** Text color used on the selected list item (may be undefined). */
+  /**
+   * Text color used on the selected list item. Optional in the legacy/v1
+   * shape: the v1 loose resolver (`resolveThemeColors`) may leave it
+   * `undefined`. The v2 semantic resolver (`resolveSemanticTheme`) always
+   * yields a visible value and returns {@link SemanticThemePalette}, whose
+   * `selectedText` is required.
+   */
   selectedText: ThemeColorValue | undefined
   /** Background color of the app/surface. */
   background: ThemeColorValue
   /** Dialog/panel surface background color. */
   panel: ThemeColorValue
+}
+
+/**
+ * v2-specific resolved palette: every field of {@link ThemePalette}, but
+ * `selectedText` is **required**. `resolveSemanticTheme` (v2) never yields
+ * `undefined` for it — when every selection-text state is absent or
+ * transparent it falls back to the resolved, visible `fg` — so v2 chip/label
+ * consumers get non-optional, always-visible text without a `?? fallback`.
+ *
+ * Extends {@link ThemePalette}, so it is a drop-in wherever the legacy shape is
+ * expected (e.g. `createV2Host` returns `WlibHost<SemanticThemePalette>`, which
+ * remains assignable to `WlibHost`).
+ */
+export interface SemanticThemePalette extends ThemePalette {
+  /** Text color used on the selected list item. Always defined and visible (v2). */
+  selectedText: ThemeColorValue
 }
 
 export interface ThemePaletteFallbacks {
@@ -153,7 +175,10 @@ export function resolveThemeColors(
  * untouched — never string-coerced — so the host's color objects survive.
  *
  * Mapping:
- * - `fg`          ← `text.base`
+ * - `fg`          ← `text.base` (must itself be visible: a transparent/zero-alpha
+ *                   `text.base` is skipped and falls through to
+ *                   `THEME_DEFAULTS.fg`, so the `selectedText` fallback below can
+ *                   never inherit invisible text)
  * - `muted`       ← `text.muted`
  * - `red`         ← `text.feedback.error.base`
  * - `primary`     ← `background.action.primary.focused`, then `selected`,
@@ -161,9 +186,19 @@ export function resolveThemeColors(
  *                   theme leaves `.base`/`selected` `transparent` and only
  *                   paints the accent on `focused`, so focused wins.
  * - `selectedText`← `text.action.primary.focused`, then `selected`, then
- *                   `.base` (text on the primary background).
+ *                   `.base` (text on the primary background), and finally the
+ *                   resolved `fg`. v2 chip consumers always need *visible*
+ *                   text, so when every selection text state is absent or
+ *                   transparent this never yields `undefined` — it falls back
+ *                   to the resting foreground. (The v1 loose resolver,
+ *                   {@link resolveThemeColors}, deliberately keeps its legacy
+ *                   `undefined` behavior.)
  * - `background`  ← `background.base`
- * - `panel`       ← `background.raised.high`, then `background.raised.base`
+ * - `panel`       ← `background.raised.base`, then `background.raised.high`.
+ *                   `.base` wins for 1:1 overlay-surface parity with the v1
+ *                   plugin scheme: the v1→v2 theme migrator maps legacy
+ *                   `backgroundPanel` to resolved `background.raised.base`,
+ *                   while `.high` is a lighter menu surface.
  *
  * Resolved keys carry no `$` sigil (unlike the raw `$focused`/`$selected`
  * definition keys), matching the host's `ResolvedTheme`.
@@ -172,17 +207,23 @@ export function resolveThemeColors(
  * so a theme cannot paint an invisible surface or label: for the selection
  * background and app/panel surfaces a see-through value would render nothing,
  * and for `selectedText` it would render invisible text — so a transparent
- * selected-text token is *skipped* (falls through, ending at `undefined`)
- * rather than preserved, leaving the consumer free to use its resting text
- * color. Non-transparent RGBA objects are preserved by identity.
+ * selected-text token is *skipped* rather than preserved. Unlike v1, v2 then
+ * lands on the resolved foreground instead of `undefined` so a chip can never
+ * render invisible text; the resolved foreground is itself drawn only from a
+ * visible `text.base` (a transparent one falls through to `THEME_DEFAULTS.fg`).
+ * Non-transparent RGBA objects are preserved by identity.
+ *
+ * Returns the v2-specific {@link SemanticThemePalette} — the legacy
+ * {@link ThemePalette} shape with `selectedText` narrowed to required.
  */
 export function resolveSemanticTheme(
   theme: SemanticThemeLike | null | undefined,
-): ThemePalette {
+): SemanticThemePalette {
   const actionBackground = theme?.background?.action?.primary
   const actionText = theme?.text?.action?.primary
+  const fg = visibleColor(theme?.text?.base) ?? THEME_DEFAULTS.fg
   return {
-    fg: validColor(theme?.text?.base) ?? THEME_DEFAULTS.fg,
+    fg,
     muted: validColor(theme?.text?.muted) ?? THEME_DEFAULTS.muted,
     red: validColor(theme?.text?.feedback?.error?.base) ?? THEME_DEFAULTS.red,
     primary:
@@ -193,11 +234,12 @@ export function resolveSemanticTheme(
     selectedText:
       visibleColor(actionText?.focused) ??
       visibleColor(actionText?.selected) ??
-      visibleColor(actionText?.base),
+      visibleColor(actionText?.base) ??
+      fg,
     background: visibleColor(theme?.background?.base) ?? THEME_DEFAULTS.background,
     panel:
-      visibleColor(theme?.background?.raised?.high) ??
       visibleColor(theme?.background?.raised?.base) ??
+      visibleColor(theme?.background?.raised?.high) ??
       THEME_DEFAULTS.panel,
   }
 }

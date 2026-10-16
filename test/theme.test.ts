@@ -150,7 +150,7 @@ describe("THEME_DEFAULTS", () => {
 })
 
 describe("resolveSemanticTheme", () => {
-  it("maps the v2 semantic tokens onto the palette (base fallback)", () => {
+  it("maps the v2 semantic tokens onto the palette (raised.base wins for panel)", () => {
     const palette = resolveSemanticTheme({
       text: {
         base: "#aaaaaa",
@@ -160,7 +160,7 @@ describe("resolveSemanticTheme", () => {
       },
       background: {
         base: "#010101",
-        raised: { high: "#020202" },
+        raised: { base: "#020202", high: "#030303" },
         action: { primary: { base: "#4f46e5" } },
       },
     })
@@ -234,10 +234,25 @@ describe("resolveSemanticTheme", () => {
     expect(palette.panel).toBe(THEME_DEFAULTS.panel)
   })
 
-  it("maps selected text through .focused → .selected → .base, or undefined when all transparent", () => {
+  it("maps selected text through .focused → .selected → .base, then falls back to fg when all are absent or transparent", () => {
     expect(resolveSemanticTheme({ text: { action: { primary: { focused: "#f" } } } }).selectedText).toBe("#f")
     expect(resolveSemanticTheme({ text: { action: { primary: { selected: "#s" } } } }).selectedText).toBe("#s")
     expect(resolveSemanticTheme({ text: { action: { primary: { base: "#b" } } } }).selectedText).toBe("#b")
+
+    // Every selection-text state transparent → falls back to the *resolved* fg,
+    // never `undefined`: a v2 chip must always render visible text.
+    expect(
+      resolveSemanticTheme({
+        text: {
+          base: "#ababab",
+          action: {
+            primary: { focused: "transparent", selected: { r: 0, g: 0, b: 0, a: 0 }, base: "transparent" },
+          },
+        },
+      }).selectedText,
+    ).toBe("#ababab")
+
+    // Absent entirely (no text.base) → falls back to the default fg.
     expect(
       resolveSemanticTheme({
         text: {
@@ -246,7 +261,7 @@ describe("resolveSemanticTheme", () => {
           },
         },
       }).selectedText,
-    ).toBeUndefined()
+    ).toBe(THEME_DEFAULTS.fg)
   })
 
   it("preserves non-transparent RGBA action surfaces by identity (incl. no alpha)", () => {
@@ -260,34 +275,58 @@ describe("resolveSemanticTheme", () => {
     expect(palette.selectedText).toBe(opaqueNoAlpha)
   })
 
-  it("prefers background.raised.high for the panel", () => {
+  // v1 parity: the v1→v2 migrator maps legacy `backgroundPanel` to resolved
+  // `background.raised.base`, while `.high` is a lighter menu surface — so
+  // `.base` must win when both exist.
+  it("prefers background.raised.base over .high for the panel", () => {
     expect(
-      resolveSemanticTheme({ background: { raised: { high: "#highhh", base: "#baseee" } } }).panel,
-    ).toBe("#highhh")
-  })
-
-  it("falls back to background.raised.base when high is missing", () => {
-    expect(
-      resolveSemanticTheme({ background: { raised: { base: "#baseee" } } }).panel,
+      resolveSemanticTheme({ background: { raised: { base: "#baseee", high: "#highhh" } } }).panel,
     ).toBe("#baseee")
   })
 
-  it("falls back to defaults for an empty/absent theme", () => {
+  it("falls back to background.raised.high when .base is missing", () => {
+    expect(
+      resolveSemanticTheme({ background: { raised: { high: "#highhh" } } }).panel,
+    ).toBe("#highhh")
+  })
+
+  it("treats a transparent .base as missing and falls through to .high", () => {
+    const zeroAlpha = { r: 0, g: 0, b: 0, a: 0 }
+    expect(
+      resolveSemanticTheme({ background: { raised: { base: "transparent", high: "#highhh" } } }).panel,
+    ).toBe("#highhh")
+    expect(
+      resolveSemanticTheme({ background: { raised: { base: zeroAlpha, high: "#highhh" } } }).panel,
+    ).toBe("#highhh")
+  })
+
+  it("falls back to the default panel when both raised surfaces are absent or transparent", () => {
+    expect(resolveSemanticTheme({}).panel).toBe(THEME_DEFAULTS.panel)
+    expect(
+      resolveSemanticTheme({ background: { raised: { base: "transparent", high: "TRANSPARENT" } } }).panel,
+    ).toBe(THEME_DEFAULTS.panel)
+  })
+
+  it("falls back to defaults for an empty/absent theme (selectedText lands on default fg)", () => {
     expect(resolveSemanticTheme({})).toEqual({
       fg: "#ffffff",
       muted: "#888888",
       red: "#ef4444",
       primary: "#4f46e5",
-      selectedText: undefined,
+      selectedText: "#ffffff",
       background: "#000000",
       panel: "#000000",
     })
     expect(resolveSemanticTheme(null).fg).toBe("#ffffff")
     expect(resolveSemanticTheme(undefined).background).toBe("#000000")
+    expect(resolveSemanticTheme(null).selectedText).toBe("#ffffff")
   })
 
-  it("returns selectedText undefined when the token is absent", () => {
-    expect(resolveSemanticTheme({ text: { base: "#fff" } }).selectedText).toBeUndefined()
+  it("returns fg (not undefined) for v2 when the selection-text token is absent, but keeps v1 undefined", () => {
+    // v2 semantic resolver: an absent selection-text token falls back to fg.
+    expect(resolveSemanticTheme({ text: { base: "#fff" } }).selectedText).toBe("#fff")
+    // v1 loose resolver deliberately keeps its legacy `undefined` for the same absence.
+    expect(resolveThemeColors({}).selectedText).toBeUndefined()
   })
 
   it("passes RGBA objects through untouched (no string coercion)", () => {
@@ -308,7 +347,7 @@ describe("resolveSemanticTheme", () => {
       },
       background: {
         base: background,
-        raised: { high: panel },
+        raised: { base: panel, high: { r: 0.9, g: 0.9, b: 0.9, a: 1 } },
         action: { primary: { base: primary } },
       },
     })

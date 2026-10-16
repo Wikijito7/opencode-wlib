@@ -75,8 +75,18 @@ export interface HostCommandOptions {
 /**
  * The host surface every wlib command/keymap/dialog/theme helper uses.
  * Implemented once per host generation; never mixed within one adapter.
+ *
+ * Generic over the palette its `theme()` resolves:
+ * - `createV2Host` returns `WlibHost<SemanticThemePalette>` — the v2 palette
+ *   whose `selectedText` is required (always visible).
+ * - `createV1Host` returns the default `WlibHost<ThemePalette>` — the legacy
+ *   shape, whose `selectedText` stays optional.
+ *
+ * The parameter is covariant (`theme(): P`), so a `WlibHost<SemanticThemePalette>`
+ * is assignable wherever the default `WlibHost` (i.e. `WlibHost<ThemePalette>`)
+ * is expected — callers that don't care keep the unparameterised spelling.
  */
-export interface WlibHost {
+export interface WlibHost<P extends ThemePalette = ThemePalette> {
   /** Which host generation this adapter targets. */
   readonly kind: HostKind
   /** Register a palette command (+ optional key binding). Returns cleanup. */
@@ -88,5 +98,5 @@ export interface WlibHost {
   /** Reactive terminal geometry. */
   readonly renderer: HostRenderer
   /** Resolve the current semantic theme palette (RGBA values preserved). */
-  theme(): ThemePalette
+  theme(): P
 }

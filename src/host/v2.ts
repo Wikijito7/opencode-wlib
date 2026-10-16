@@ -20,7 +20,7 @@ import type {
   WlibHost,
 } from "./types"
 import type { KeyLayerConfig } from "../core/keys"
-import type { ThemePalette } from "../core/theme"
+import type { SemanticThemePalette } from "../core/theme"
 import { resolveSemanticTheme } from "../core/theme"
 
 /**
@@ -85,7 +85,7 @@ export function toV2Layer(config: KeyLayerConfig): KeymapLayer {
 }
 
 /** Create the v2 host adapter from a plugin `Context`. */
-export function createV2Host(context: Plugin.Context): WlibHost {
+export function createV2Host(context: Plugin.Context): WlibHost<SemanticThemePalette> {
   // `context.renderer` is required on the v2 Context (see `Plugin.Context`).
   // `CliRenderer` exposes the live geometry as `terminalWidth`/`terminalHeight`;
   // its `resize` event carries no width/height payload, so a listener must
@@ -147,6 +147,6 @@ export function createV2Host(context: Plugin.Context): WlibHost {
     },
     dialog,
     renderer,
-    theme: (): ThemePalette => resolveSemanticTheme(context.theme),
+    theme: (): SemanticThemePalette => resolveSemanticTheme(context.theme),
   }
 }

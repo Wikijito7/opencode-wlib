@@ -532,7 +532,25 @@ describe("createV2Host", () => {
       })
       const palette = createV2Host(context as never).theme()
       expect(palette.primary).toBe("#4f46e5")
-      expect(palette.selectedText).toBeUndefined()
+      // Transparent selection text is skipped and v2 falls back to the resolved
+      // fg (default here, since text.base is absent) so a chip never renders invisible text.
+      expect(palette.fg).toBe("#ffffff")
+      expect(palette.selectedText).toBe("#ffffff")
+    })
+
+    it("falls back to the resolved fg for transparent selection text", () => {
+      const { context } = makeContext({
+        theme: {
+          text: {
+            base: "#ababab",
+            action: { primary: { focused: "transparent", selected: { r: 0, g: 0, b: 0, a: 0 }, base: "transparent" } },
+          },
+          background: { action: { primary: { focused: "#4f46e5" } } },
+        },
+      })
+      const palette = createV2Host(context as never).theme()
+      expect(palette.fg).toBe("#ababab")
+      expect(palette.selectedText).toBe("#ababab")
     })
 
     it("preserves non-transparent RGBA action tokens untouched", () => {
@@ -558,7 +576,7 @@ describe("createV2Host", () => {
       expect(palette.primary).toBe("#4f46e5")
       expect(palette.background).toBe("#000000")
       expect(palette.panel).toBe("#000000")
-      expect(palette.selectedText).toBeUndefined()
+      expect(palette.selectedText).toBe("#ffffff")
     })
   })
 })
