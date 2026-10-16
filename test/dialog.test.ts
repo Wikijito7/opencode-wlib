@@ -128,3 +128,53 @@ describe("small-screen fit never cuts content off", () => {
     expect(resolveDialogMaxHeight(15)).toBe(8)
   })
 })
+
+// ─── useDialogSizing fallback composition ────────────────────────────────────
+//
+// `useDialogSizing` feeds the host adapter's geometry through `resolveDialogFit`,
+// substituting +Infinity for any dimension the host has not reported yet (>0 is
+// "known"). These tests pin that composition, which is the only testable slice
+// of the hook (the hook itself imports @opentui/solid and stays host-only).
+
+describe("useDialogSizing fallback composition", () => {
+  const INF = Number.POSITIVE_INFINITY
+  const compose = (
+    d: { width: number; height: number },
+    desired?: { size?: "medium" | "large" | "xlarge"; maxHeight?: number },
+  ) =>
+    resolveDialogFit(
+      {
+        width: d.width > 0 ? d.width : INF,
+        height: d.height > 0 ? d.height : INF,
+      },
+      desired,
+    )
+
+  it("returns the desired fit when the host has not reported geometry yet", () => {
+    expect(compose({ width: 0, height: 0 }, { size: "xlarge", maxHeight: 40 })).toEqual({
+      size: "xlarge",
+      maxHeight: 40,
+    })
+    expect(compose({ width: 0, height: 0 })).toEqual({ size: "large", maxHeight: 40 })
+  })
+
+  it("returns the desired fit on an unknown width but a known tall height", () => {
+    expect(compose({ width: 0, height: 80 }, { size: "xlarge", maxHeight: 40 })).toEqual({
+      size: "xlarge",
+      maxHeight: 40,
+    })
+  })
+
+  it("downgrades to the real terminal once geometry is known", () => {
+    expect(compose({ width: 70, height: 25 }, { size: "large", maxHeight: 40 })).toEqual({
+      size: "medium",
+      maxHeight: 8,
+    })
+  })
+
+  it("reacts to a resize by re-resolving the fit", () => {
+    expect(compose({ width: 200, height: 80 }).size).toBe("large")
+    expect(compose({ width: 60, height: 30 }).size).toBe("medium")
+    expect(compose({ width: 200, height: 40 }).maxHeight).toBe(16)
+  })
+})

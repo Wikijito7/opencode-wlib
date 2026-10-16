@@ -2,22 +2,27 @@
 /**
  * opencode-wlib — reusable export controller.
  *
- * Host-agnostic controller that owns the export flow state machine: the
- * format step, the destination step (clipboard vs file), the "copied!" flash,
- * and the file-write result popup. It registers a priority-2 key layer, writes
- * to the clipboard or disk, and exposes overlay renderers. Host plugins call
- * `renderOverlay()` for the format/destination popup, `renderResultOverlay()`
- * for the file-save result popup, and `copiedFlash()`/`onCopied` to render
- * the footer flash.
+ * Host-agnostic controller (driven by a `WlibHost` adapter) that owns the
+ * export flow state machine: the format step, the destination step (clipboard
+ * vs file), the "copied!" flash, and the file-write result popup. It registers
+ * a priority-2 key layer through the adapter, writes to the clipboard or disk,
+ * and exposes overlay renderers. Host plugins include `renderOverlay()` for the
+ * format/destination popup and `renderResultOverlay()` for the file-save result
+ * popup once in the dialog JSX, and call `copiedFlash()`/`onCopied` to render
+ * the footer flash. Each renderer returns a persistently mounted reactive
+ * `Show` (driven by the controller's `showExport`/`showResult` signals) so the
+ * overlay reacts to `open()`/`close()` even when the host evaluates the JSX
+ * expression only once — a bare `return null` from an opaque method does not
+ * establish a reactive dependency in that path.
  *
  * Must be created inside a Solid owner (i.e. from within a dialog render)
  * because it registers a `createEffect` + `onCleanup` for the key layer
  * and the flash timeout.
  */
 
-import { createEffect, createSignal, onCleanup, type JSX } from "solid-js"
+import { createEffect, createSignal, onCleanup, Show, type JSX } from "solid-js"
 import { dirname } from "node:path"
-import type { TuiPluginApi } from "@opencode-ai/plugin/tui"
+import type { WlibHost } from "../host/types"
 import { formatToExtension, type Exportable } from "../core/export"
 import { ExportOverlay, type ExportOverlayOption } from "./export-overlay"
 import { ExportResultOverlay } from "./export-result-overlay"
@@ -26,13 +31,12 @@ import { writeClipboard } from "../core/clipboard"
 import { exportFilePath, writeFile, timestamp, EXPORT_BASE_DIR } from "../core/file"
 import { openFolder } from "../core/open-folder"
 import { registerDialogKeyLayer } from "../core/keys"
-import { resolveThemeColors } from "../core/theme"
 
 export interface ExportController {
   open(): void
   handleKey(key: string): boolean
-  renderOverlay(): JSX.Element | null
-  renderResultOverlay(): JSX.Element | null
+  renderOverlay(): JSX.Element
+  renderResultOverlay(): JSX.Element
   copiedFlash(): boolean
   onCopied(listener: () => void): () => void
 }
@@ -52,7 +56,7 @@ const DEST_OPTIONS: ExportOverlayOption[] = [
 
 type ExportStep = "format" | "destination" | "result"
 
-export function createExportController(api: TuiPluginApi, exportable: Exportable, opts: ExportControllerOptions): ExportController {
+export function createExportController(host: WlibHost, exportable: Exportable, opts: ExportControllerOptions): ExportController {
   const [showExport, setShowExport] = createSignal(false)
   const [showResult, setShowResult] = createSignal(false)
   const [step, setStep] = createSignal<ExportStep>("format")
@@ -65,7 +69,7 @@ export function createExportController(api: TuiPluginApi, exportable: Exportable
   let timeout: ReturnType<typeof setTimeout> | null = null
   const listeners = new Set<() => void>()
 
-  const colors = resolveThemeColors(api.theme?.current)
+  const colors = host.theme()
 
   function flashCopied() {
     setCopied(true)
@@ -174,9 +178,13 @@ export function createExportController(api: TuiPluginApi, exportable: Exportable
 
     if (step() === "result") {
       if (resultError()) {
-        // No file was written: only allow closing; never focus/activate Open.
-        if (key === "escape" || key === "enter" || key === "o") { close(); return true }
-        return true // swallow other keys (modal); Open cannot be reached
+        // No file was written: Close is the only action. `enter`/`escape`
+        // dismiss the popup; the other registered dialog/export keys
+        // (including `o` and the arrows) are consumed so Open/open-folder can
+        // never fire. The keymap only invokes handlers for registered
+        // bindings, so keys with no binding are never dispatched at all.
+        if (key === "escape" || key === "enter") { close(); return true }
+        return true // consume other registered keys (modal); Open cannot fire
       }
       if (key === "left") {
         setResultFocus(0)
@@ -207,7 +215,7 @@ export function createExportController(api: TuiPluginApi, exportable: Exportable
 
   createEffect(() => {
     if (!(showExport() || showResult())) return
-    const cleanup = registerDialogKeyLayer(api, {
+    const cleanup = registerDialogKeyLayer(host, {
       priority: 2,
       bindings: [
         { key: "up",     cmd: "export.up",     desc: "Previous" },
@@ -240,37 +248,42 @@ export function createExportController(api: TuiPluginApi, exportable: Exportable
     }
   })
 
-  function renderOverlay(): JSX.Element | null {
-    if (!showExport()) return null
-    const isDest = step() === "destination"
+  function renderOverlay(): JSX.Element {
     return (
-      <ExportOverlay
-        title={isDest ? "Export to" : "Export"}
-        formats={isDest ? DEST_OPTIONS : exportable.formats}
-        selectedIndex={isDest ? destSel() : exportSel()}
-        footer={isDest ? "↑↓ choose · enter confirm · esc back" : "↑↓ choose · enter continue"}
-        fg={colors.fg}
-        muted={colors.muted}
-        primary={colors.primary}
-        selectedText={colors.selectedText}
-        bg={colors.panel}
-      />
+      <Show when={showExport()}>
+        {(_) => (
+          <ExportOverlay
+            title={step() === "destination" ? "Export to" : "Export"}
+            formats={step() === "destination" ? DEST_OPTIONS : exportable.formats}
+            selectedIndex={step() === "destination" ? destSel() : exportSel()}
+            footer={step() === "destination" ? "↑↓ choose · enter confirm · esc back" : "↑↓ choose · enter continue"}
+            fg={colors.fg}
+            muted={colors.muted}
+            primary={colors.primary}
+            selectedText={colors.selectedText}
+            bg={colors.panel}
+          />
+        )}
+      </Show>
     )
   }
 
-  function renderResultOverlay(): JSX.Element | null {
-    if (!showResult()) return null
+  function renderResultOverlay(): JSX.Element {
     return (
-      <ExportResultOverlay
-        path={resultPath()}
-        error={resultError()}
-        focus={resultFocus()}
-        fg={colors.fg}
-        muted={colors.muted}
-        primary={colors.primary}
-        selectedText={colors.selectedText}
-        bg={colors.panel}
-      />
+      <Show when={showResult()}>
+        {(_) => (
+          <ExportResultOverlay
+            path={resultPath()}
+            error={resultError()}
+            focus={resultFocus()}
+            fg={colors.fg}
+            muted={colors.muted}
+            primary={colors.primary}
+            selectedText={colors.selectedText}
+            bg={colors.panel}
+          />
+        )}
+      </Show>
     )
   }
 

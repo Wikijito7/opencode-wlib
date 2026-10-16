@@ -3,9 +3,11 @@
  * opencode-wlib — export result overlay.
  *
  * A small, fully presentational popup shown after an export is written to
- * disk. It reports the destination path (or an error), and offers `Close`
- * and `Open` buttons. It does NOT handle key presses and has no side effects —
- * the parent controller owns `focus` and the navigation.
+ * disk. It reports the destination path (or an error), offering `Close` plus
+ * `Open` on success. On a file-write error there is no folder to open, so the
+ * `Open` button is omitted and a single centered `Close` is shown. It does NOT
+ * handle key presses and has no side effects — the parent controller owns
+ * `focus` and the navigation.
  */
 
 import type { JSX } from "solid-js"
@@ -80,10 +82,10 @@ export function ExportResultOverlay(props: ExportResultOverlayProps): JSX.Elemen
           )}
         </box>
 
-        {/* Button row — mirrors analyze tab height (1 line), half-width each, dialog gap padding */}
-        <box flexDirection="row" gap={2}>
+        {/* Button row — success: Close/Open half-width each; error: one centered Close */}
+        <box flexDirection="row" gap={2} justifyContent={props.error ? "center" : undefined}>
           <box
-            flexGrow={1}
+            flexGrow={props.error ? undefined : 1}
             alignItems="center"
             justifyContent="center"
             paddingLeft={1}
@@ -92,21 +94,25 @@ export function ExportResultOverlay(props: ExportResultOverlayProps): JSX.Elemen
           >
             <text fg={props.focus === 0 ? props.selectedText : props.muted}>Close</text>
           </box>
-          <box
-            flexGrow={1}
-            alignItems="center"
-            justifyContent="center"
-            paddingLeft={1}
-            paddingRight={1}
-            backgroundColor={!props.error && props.focus === 1 ? props.primary : undefined}
-          >
-            <text fg={!props.error && props.focus === 1 ? props.selectedText : props.muted}>Open</text>
-          </box>
+          {!props.error && (
+            <box
+              flexGrow={1}
+              alignItems="center"
+              justifyContent="center"
+              paddingLeft={1}
+              paddingRight={1}
+              backgroundColor={props.focus === 1 ? props.primary : undefined}
+            >
+              <text fg={props.focus === 1 ? props.selectedText : props.muted}>Open</text>
+            </box>
+          )}
         </box>
 
-        {/* Footer hint */}
+        {/* Footer hint — error has a single action; success advertises the full key set */}
         <box flexDirection="row" justifyContent="flex-end">
-          <text fg={props.muted}>←→ choose · enter open/close · esc close</text>
+          <text fg={props.muted}>
+            {props.error ? "enter close · esc close" : "←→ choose · enter confirm · o open · esc close"}
+          </text>
         </box>
       </box>
     </box>

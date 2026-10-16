@@ -1,82 +1,107 @@
 import { describe, expect, it } from "bun:test"
-import { registerSlashCommand } from "../src/core/command"
+import { registerSlashCommand, type SlashCommandOptions } from "../src/core/command"
+import type { HostCommandOptions, WlibHost } from "../src/host/types"
 
-// Minimal TUI API mock capturing registerLayer calls.
-function makeApiMock() {
-  const layers: unknown[] = []
-  const api = {
-    keymap: {
-      registerLayer(config: unknown) {
-        layers.push(config)
-        return () => { /* cleanup no-op */ }
-      },
+// Minimal host mock capturing registerCommand calls and returning a sentinel
+// cleanup. The core helper is host-agnostic, so no v1/v2 specifics leak here.
+function makeHostMock() {
+  const calls: HostCommandOptions[] = []
+  const cleanup = () => { /* sentinel */ }
+  const host = {
+    kind: "v2",
+    registerCommand(options: HostCommandOptions) {
+      calls.push(options)
+      return cleanup
     },
   }
-  return { api: api as never, layers }
+  return { host: host as unknown as WlibHost, calls, cleanup }
 }
 
 describe("registerSlashCommand", () => {
-  it("registers a palette command with category/namespace/slashName", () => {
-    const { api, layers } = makeApiMock()
-    registerSlashCommand(api, {
+  it("forwards name/title/slashName/group/run to the host", () => {
+    const { host, calls } = makeHostMock()
+    const run = () => {}
+    registerSlashCommand(host, {
       name: "analyze.show",
       title: "Analyze Session Tokens",
       slashName: "analyze",
-      run: () => {},
+      run,
     })
 
-    const layer = layers[0] as { commands: Array<Record<string, unknown>>; bindings: unknown[] }
-    expect(layer.commands).toHaveLength(1)
-    const cmd = layer.commands[0]
-    expect(cmd.name).toBe("analyze.show")
-    expect(cmd.title).toBe("Analyze Session Tokens")
-    expect(cmd.category).toBe("Plugin")
-    expect(cmd.namespace).toBe("palette")
-    expect(cmd.slashName).toBe("analyze")
-    expect(typeof cmd.run).toBe("function")
-    expect(layer.bindings).toEqual([])
+    expect(calls).toHaveLength(1)
+    expect(calls[0]).toEqual({
+      name: "analyze.show",
+      title: "Analyze Session Tokens",
+      slashName: "analyze",
+      group: "Plugin",
+      key: undefined,
+      run,
+    })
   })
 
-  it("adds a key binding with title as default desc", () => {
-    const { api, layers } = makeApiMock()
-    registerSlashCommand(api, {
+  it("defaults the group to Plugin", () => {
+    const { host, calls } = makeHostMock()
+    registerSlashCommand(host, {
+      name: "x.open",
+      title: "X",
+      slashName: "x",
+      run: () => {},
+    })
+    expect(calls[0].group).toBe("Plugin")
+  })
+
+  it("forwards a string key binding untouched", () => {
+    const { host, calls } = makeHostMock()
+    registerSlashCommand(host, {
       name: "analyze.show",
       title: "Analyze Session Tokens",
       slashName: "analyze",
       key: "ctrl+shift+a",
       run: () => {},
     })
-
-    const layer = layers[0] as { bindings: Array<{ key: string; cmd: string; desc: string }> }
-    expect(layer.bindings).toEqual([
-      { key: "ctrl+shift+a", cmd: "analyze.show", desc: "Analyze Session Tokens" },
-    ])
+    expect(calls[0].key).toBe("ctrl+shift+a")
   })
 
-  it("adds a key binding with custom desc", () => {
-    const { api, layers } = makeApiMock()
-    registerSlashCommand(api, {
+  it("forwards an explicit key binding object with custom desc", () => {
+    const { host, calls } = makeHostMock()
+    registerSlashCommand(host, {
       name: "persona.select",
       title: "Select Persona",
       slashName: "persona",
       key: { key: "ctrl+shift+m", desc: "Pick a persona" },
       run: () => {},
     })
-
-    const layer = layers[0] as { bindings: Array<{ key: string; cmd: string; desc: string }> }
-    expect(layer.bindings).toEqual([
-      { key: "ctrl+shift+m", cmd: "persona.select", desc: "Pick a persona" },
-    ])
+    expect(calls[0].key).toEqual({ key: "ctrl+shift+m", desc: "Pick a persona" })
   })
 
-  it("returns a cleanup function", () => {
-    const { api } = makeApiMock()
-    const cleanup = registerSlashCommand(api, {
+  it("returns the cleanup supplied by the host", () => {
+    const { host, cleanup } = makeHostMock()
+    const returned = registerSlashCommand(host, {
       name: "x",
       title: "X",
       slashName: "x",
       run: () => {},
     })
-    expect(typeof cleanup).toBe("function")
+    expect(returned).toBe(cleanup)
+    expect(typeof returned).toBe("function")
+  })
+
+  it("never touches the host's command metadata conventions itself", () => {
+    // The core helper must not fabricate v1/v2-specific fields (category,
+    // namespace, id, palette, slash). Those belong to the adapter.
+    const { host, calls } = makeHostMock()
+    const opts: SlashCommandOptions = {
+      name: "analyze.show",
+      title: "Analyze Session Tokens",
+      slashName: "analyze",
+      run: () => {},
+    }
+    registerSlashCommand(host, opts)
+    const forwarded = calls[0] as Record<string, unknown>
+    expect("category" in forwarded).toBe(false)
+    expect("namespace" in forwarded).toBe(false)
+    expect("id" in forwarded).toBe(false)
+    expect("palette" in forwarded).toBe(false)
+    expect("slash" in forwarded).toBe(false)
   })
 })
