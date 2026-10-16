@@ -431,11 +431,64 @@ describe("createExportController — destination→result transition", () => {
     await flush()
 
     expect(resultProps(controller)).toMatchObject({ path: null, error: true })
+    // The error popup stays up: it is dismissed only by an explicit enter/escape.
+    expect(isVisible(controller.renderResultOverlay())).toBe(true)
+    expect(isVisible(controller.renderOverlay())).toBe(false)
+  })
 
-    // In the error state any of esc/enter/o closes; "o" must NOT open a folder.
-    expect(controller.handleKey("o")).toBe(true)
+  it("error result handles every registered key — o/arrows/e are swallowed, enter/escape close", async () => {
+    // The export layer registers exactly these bindings: up, down, left,
+    // right, enter, escape, e, o. Only keys that ARE registered are dispatched
+    // to the controller; a truly unbound key (e.g. `q`) never reaches
+    // `handleKey` through the real host, so it is deliberately NOT asserted
+    // here — the overlay is not claimed to swallow arbitrary input.
+    async function openErrorResult(): Promise<Controller> {
+      const { host } = makeHost()
+      const controller = makeController(host)
+      writeFileImpl = async () => false
+
+      controller.open()
+      controller.handleKey("enter") // → destination
+      controller.handleKey("down") // → File
+      controller.handleKey("enter") // → confirm file
+      await flush()
+      expect(isVisible(controller.renderResultOverlay())).toBe(true)
+      return controller
+    }
+
+    // The error state offers Close only. Every registered key other than
+    // enter/escape (`o`, the arrows, `e`) is swallowed: `handleKey` returns
+    // true as the layer owns it, no open-folder side effect fires, and the
+    // error popup stays visible — none may reach Open/open-folder or close via
+    // the "o"/"e" shortcuts.
+    const swallowedKeys = ["o", "up", "down", "left", "right", "e"]
+    const controller = await openErrorResult()
+    for (const key of swallowedKeys) {
+      expect(controller.handleKey(key)).toBe(true)
+      await flush()
+
+      // Per-key: no open-folder side effect and the error modal still stands.
+      expect(openFolderCalls).toHaveLength(0)
+      expect(isVisible(controller.renderResultOverlay())).toBe(true)
+      expect(isVisible(controller.renderOverlay())).toBe(false)
+    }
+
+    // After the whole sequence the state is unchanged: error result, Close
+    // focused, no folder opened, no partial close.
     expect(openFolderCalls).toHaveLength(0)
-    expect(isVisible(controller.renderResultOverlay())).toBe(false)
+    expect(resultProps(controller)).toMatchObject({ path: null, error: true, focus: 0 })
+    expect(isVisible(controller.renderResultOverlay())).toBe(true)
+    expect(isVisible(controller.renderOverlay())).toBe(false)
+
+    // The remaining registered keys — enter and escape — both dismiss the
+    // error popup without opening a folder (fresh instance per close key).
+    for (const key of ["enter", "escape"]) {
+      const closing = await openErrorResult()
+      expect(closing.handleKey(key)).toBe(true)
+      expect(openFolderCalls).toHaveLength(0)
+      expect(isVisible(closing.renderResultOverlay())).toBe(false)
+      expect(isVisible(closing.renderOverlay())).toBe(false)
+    }
   })
 
   it("does not write an empty build result", async () => {

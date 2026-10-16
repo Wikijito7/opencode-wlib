@@ -178,9 +178,13 @@ export function createExportController(host: WlibHost, exportable: Exportable, o
 
     if (step() === "result") {
       if (resultError()) {
-        // No file was written: only allow closing; never focus/activate Open.
-        if (key === "escape" || key === "enter" || key === "o") { close(); return true }
-        return true // swallow other keys (modal); Open cannot be reached
+        // No file was written: Close is the only action. `enter`/`escape`
+        // dismiss the popup; the other registered dialog/export keys
+        // (including `o` and the arrows) are consumed so Open/open-folder can
+        // never fire. The keymap only invokes handlers for registered
+        // bindings, so keys with no binding are never dispatched at all.
+        if (key === "escape" || key === "enter") { close(); return true }
+        return true // consume other registered keys (modal); Open cannot fire
       }
       if (key === "left") {
         setResultFocus(0)
