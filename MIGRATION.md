@@ -200,10 +200,44 @@ paths.
 
 ## Steps
 
-1. **Update the submodule**
+1. **Update the submodule to the approved v2 commit (do not use
+   `--remote`)**
+
+   `git submodule update --remote` tracks whatever upstream branch the
+   submodule's `branch` config (or `origin/HEAD`) points at, which may be the
+   default branch rather than the reviewed `v2` line — it can silently land you
+   on the wrong tip. Pin the exact reviewed commit instead.
+
+   The commit below must be the **approved v2 commit** (the reviewed commit that
+   contains `src/`), never an implicit `origin/HEAD` or default-branch tip. The
+   submodule directory depends on where the consumer mounted it — it is often
+   nested (e.g. `packages/foo/wlib`), so set `WLIB_PATH` to the path as it
+   actually exists in this consumer repo and use it throughout. Fetch the branch
+   with an explicit refspec so `origin/v2` resolves unambiguously, inspect it,
+   and check out that commit detached:
+
    ```bash
-   git submodule update --remote --merge
-   git commit -m "chore: bump opencode-wlib (src/ layout)"
+   # from the consumer repo root
+   WLIB_PATH="wlib"                              # actual submodule path in this repo (often nested)
+   APPROVED_V2_SHA="REPLACE_WITH_REVIEWED_V2_SHA" # full SHA of the reviewed v2 commit
+
+   git submodule update --init "$WLIB_PATH"                          # ensure it's present
+   git -C "$WLIB_PATH" fetch origin refs/heads/v2:refs/remotes/origin/v2
+   #   ^ explicit refspec so `origin/v2` is unambiguous
+   git -C "$WLIB_PATH" log --oneline origin/v2 -- src/              # inspect: which commits contain src/
+   git -C "$WLIB_PATH" checkout "$APPROVED_V2_SHA"                  # checkout the exact v2 commit, detached
+   git -C "$WLIB_PATH" rev-parse HEAD                               # confirm HEAD == "$APPROVED_V2_SHA"
+   git -C "$WLIB_PATH" log -1 --stat                                # confirm the src/ layout is present
+   ```
+
+   Set `APPROVED_V2_SHA` to the full SHA of the reviewed v2 commit — do not
+   substitute `origin/v2`, `origin/HEAD`, or a default-branch tip, and do not
+   merge; a detached checkout of the exact commit is what keeps the consumer
+   reproducible. Then stage the submodule pointer and commit the consumer change:
+
+   ```bash
+   git add "$WLIB_PATH"
+   git commit -m "chore: pin opencode-wlib to approved v2 src/ layout ($APPROVED_V2_SHA)"
    ```
 
 2. **Rewrite imports** using the mapping below. A single `find`/`sed` (or your

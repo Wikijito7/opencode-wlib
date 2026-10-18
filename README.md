@@ -294,15 +294,49 @@ A reusable export flow shared by every plugin that needs to dump data (usage, an
 ```bash
 # add to a plugin repo (wlib/ inside the plugin folder — never inside an
 # existing shared/ dir, those hold plugin-local helpers)
-git submodule add https://github.com/Wikijito7/opencode-wlib <plugin-folder>/wlib
+git submodule add https://github.com/Wikijito7/opencode-wlib "<plugin-folder>/wlib"
 
 # after cloning / pulling a repo that uses it
 git submodule update --init --recursive
-
-# update to the latest wlib commit
-git submodule update --remote --merge
-git commit -m "chore: bump opencode-wlib"
 ```
+
+### Pinning a reviewed wlib commit
+
+Bump the pinned submodule to an **exact, reviewed commit SHA**, never to a
+floating branch. Do **not** run `git submodule update --remote` (or any
+`--remote --merge` form): it advances the submodule to `origin`'s implicit
+default branch (what `origin/HEAD` points at, e.g. `origin/main` — not this
+project's reviewed v2 line), which is not a reviewed revision and can pull
+unreviewed commits. Pin explicitly instead.
+
+Set the three values for the consumer, then run the four steps. Quote every
+placeholder — an angle-bracket placeholder left unquoted is a shell redirection,
+not an argument. The submodule path is generic and may be nested; use the path
+`git submodule add` actually wrote (visible in `.gitmodules`).
+
+```bash
+WLIB_BRANCH="v2"                           # branch the reviewed commit lives on (the reviewed v2 line)
+WLIB_SHA="REPLACE_WITH_APPROVED_FULL_40CHAR_SHA"  # exact approved commit
+WLIB_PATH="path/to/the/wlib/submodule"     # actual submodule path (may be nested)
+
+# 1. Fetch ONLY the selected branch into the submodule via an explicit refspec.
+#    No --remote, no implicit default branch / origin/HEAD.
+git -C "$WLIB_PATH" fetch origin "+refs/heads/$WLIB_BRANCH:refs/remotes/origin/$WLIB_BRANCH"
+
+# 2. Check out the exact approved SHA in detached HEAD (never a moving branch).
+git -C "$WLIB_PATH" checkout --detach "$WLIB_SHA"
+
+# 3. Stage the actual submodule path (the gitlink) in the consumer repo.
+git add "$WLIB_PATH"
+
+# 4. Commit the pin in the consumer repo.
+git commit -m "chore: bump opencode-wlib to $WLIB_SHA"
+```
+
+The consumer repo now records the exact SHA; reviewers see the pinned commit in
+the diff and can verify it against the wlib PR before merging. When migrating a
+consumer from wlib v1 to the **v2 `src/` layout**, follow the ordered steps in
+[MIGRATION.md](./MIGRATION.md).
 
 Import from plugins:
 
