@@ -16,8 +16,8 @@ import type { ThemeColorValue } from "../core/theme"
 
 export interface HelpOverlayProps {
   rows: HelpRow[]
-  fg: unknown
-  muted: unknown
+  fg: ThemeColorValue
+  muted: ThemeColorValue
   title?: string
   /** Optional overlay name shown in the bottom-right footer (hidden when absent). */
   name?: string
@@ -25,8 +25,8 @@ export interface HelpOverlayProps {
   version?: string
   /**
    * Opaque background color for the overlay box (hex string or OpenCode RGBA
-   * with alpha 1). Pass `resolveThemeColors(api.theme.current).background` so
-   * the dialog behind is never visible through the popup.
+   * with alpha 1). Pass `host.theme().background` (via `createV2Host`) so the
+   * dialog behind is never visible through the popup.
    */
   bg: ThemeColorValue
 }
