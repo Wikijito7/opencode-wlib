@@ -264,12 +264,23 @@ describe("createV1Host", () => {
   describe("theme", () => {
     it("resolves the loose v1 theme conventions", () => {
       const { api } = makeApi({
-        theme: { current: { text: "#111111", textMuted: "#222222", error: "#333333", backgroundPanel: "#444444" } },
+        theme: {
+          current: {
+            text: "#111111",
+            textMuted: "#222222",
+            error: "#333333",
+            success: "#00aa00",
+            warning: "#aa8800",
+            backgroundPanel: "#444444",
+          },
+        },
       })
       const palette = createV1Host(api).theme()
       expect(palette.fg).toBe("#111111")
       expect(palette.muted).toBe("#222222")
       expect(palette.red).toBe("#333333")
+      expect(palette.success).toBe("#00aa00")
+      expect(palette.warning).toBe("#aa8800")
       expect(palette.panel).toBe("#444444")
     })
 
@@ -277,13 +288,22 @@ describe("createV1Host", () => {
       const { api } = makeApi()
       const palette = createV1Host(api).theme()
       expect(palette.fg).toBe("#ffffff")
+      expect(palette.success).toBe("#22c55e")
+      expect(palette.warning).toBe("#eab308")
       expect(palette.background).toBe("#000000")
     })
 
     it("passes RGBA objects through untouched", () => {
       const rgba = { r: 0.1, g: 0.2, b: 0.3, a: 1 }
-      const { api } = makeApi({ theme: { current: { primary: rgba } } })
-      expect(createV1Host(api).theme().primary).toBe(rgba)
+      const success = { r: 0.1, g: 0.8, b: 0.2, a: 1 }
+      const warning = { r: 0.9, g: 0.7, b: 0.1 }
+      const { api } = makeApi({
+        theme: { current: { primary: rgba, success, warning } },
+      })
+      const palette = createV1Host(api).theme()
+      expect(palette.primary).toBe(rgba)
+      expect(palette.success).toBe(success)
+      expect(palette.warning).toBe(warning)
     })
   })
 })

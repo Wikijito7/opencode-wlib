@@ -80,7 +80,8 @@ export interface HostCommandOptions {
  * - `createV2Host` returns `WlibHost<SemanticThemePalette>` — the v2 palette
  *   whose `selectedText` is required (always visible).
  * - `createV1Host` returns the default `WlibHost<ThemePalette>` — the legacy
- *   shape, whose `selectedText` stays optional.
+ *   shape, whose `selectedText` is required but may be `undefined`
+ *   (`ThemeColorValue | undefined`).
  *
  * The parameter is covariant (`theme(): P`), so a `WlibHost<SemanticThemePalette>`
  * is assignable wherever the default `WlibHost` (i.e. `WlibHost<ThemePalette>`)

@@ -28,15 +28,47 @@ describe("resolveThemeColors", () => {
     expect(palette.fg).toBe("#ffffff")
     expect(palette.muted).toBe("#888888")
     expect(palette.red).toBe("#ef4444")
+    expect(palette.success).toBe("#22c55e")
+    expect(palette.warning).toBe("#eab308")
     expect(palette.primary).toBe("#4f46e5")
   })
 
   it("applies caller fallbacks before defaults", () => {
-    const palette = resolveThemeColors({}, { fg: "#010101", muted: "#020202", red: "#030303", primary: "#040404" })
+    const palette = resolveThemeColors(
+      {},
+      {
+        fg: "#010101",
+        muted: "#020202",
+        red: "#030303",
+        success: "#050505",
+        warning: "#060606",
+        primary: "#040404",
+      },
+    )
     expect(palette.fg).toBe("#010101")
     expect(palette.muted).toBe("#020202")
     expect(palette.red).toBe("#030303")
+    expect(palette.success).toBe("#050505")
+    expect(palette.warning).toBe("#060606")
     expect(palette.primary).toBe("#040404")
+  })
+
+  it("reads success and warning from the v1 loose theme", () => {
+    const palette = resolveThemeColors({
+      success: "#00aa00",
+      warning: "#aa8800",
+    })
+    expect(palette.success).toBe("#00aa00")
+    expect(palette.warning).toBe("#aa8800")
+  })
+
+  it("keeps v1 success/warning theme values over caller fallbacks", () => {
+    const palette = resolveThemeColors(
+      { success: "#00aa00", warning: "#aa8800" },
+      { success: "#111111", warning: "#222222" },
+    )
+    expect(palette.success).toBe("#00aa00")
+    expect(palette.warning).toBe("#aa8800")
   })
 
   it("keeps the theme value over caller fallbacks", () => {
@@ -95,9 +127,19 @@ describe("resolveThemeColors", () => {
 
     // RGBA-like objects (OpenCode theme colors) → passed through verbatim.
     const rgba = { r: 0.9, g: 0.4, b: 0.1, a: 1 }
-    const themed = resolveThemeColors({ text: rgba, primary: { r: 0.1, g: 0.8, b: 0.2 }, selectedListItemText: { r: 0, g: 0, b: 0 } })
+    const success = { r: 0.1, g: 0.8, b: 0.2, a: 1 }
+    const warning = { r: 0.9, g: 0.7, b: 0.1 }
+    const themed = resolveThemeColors({
+      text: rgba,
+      primary: { r: 0.1, g: 0.8, b: 0.2 },
+      success,
+      warning,
+      selectedListItemText: { r: 0, g: 0, b: 0 },
+    })
     expect(themed.fg).toBe(rgba)
     expect(themed.primary).toEqual({ r: 0.1, g: 0.8, b: 0.2 })
+    expect(themed.success).toBe(success)
+    expect(themed.warning).toBe(warning)
     expect(themed.selectedText).toEqual({ r: 0, g: 0, b: 0 })
   })
 
@@ -142,6 +184,8 @@ describe("THEME_DEFAULTS", () => {
       fg: "#ffffff",
       muted: "#888888",
       red: "#ef4444",
+      success: "#22c55e",
+      warning: "#eab308",
       primary: "#4f46e5",
       background: "#000000",
       panel: "#000000",
@@ -169,11 +213,66 @@ describe("resolveSemanticTheme", () => {
       fg: "#aaaaaa",
       muted: "#bbbbbb",
       red: "#ff0000",
+      success: "#22c55e",
+      warning: "#eab308",
       primary: "#4f46e5",
       selectedText: "#c0c0c0",
       background: "#010101",
       panel: "#020202",
     })
+  })
+
+  it("maps v2 success and warning feedback tokens", () => {
+    const palette = resolveSemanticTheme({
+      text: {
+        feedback: {
+          success: { base: "#00aa00" },
+          warning: { base: "#aa8800" },
+        },
+      },
+    })
+    expect(palette.success).toBe("#00aa00")
+    expect(palette.warning).toBe("#aa8800")
+  })
+
+  it("preserves success/warning RGBA feedback tokens by identity", () => {
+    const success = { r: 0.1, g: 0.8, b: 0.2, a: 1 }
+    const warning = { r: 0.9, g: 0.7, b: 0.1 }
+    const palette = resolveSemanticTheme({
+      text: {
+        feedback: {
+          success: { base: success },
+          warning: { base: warning },
+        },
+      },
+    })
+    expect(palette.success).toBe(success)
+    expect(palette.warning).toBe(warning)
+  })
+
+  it("rejects transparent success/warning tokens and falls back to defaults", () => {
+    const zeroAlpha = { r: 0, g: 0, b: 0, a: 0 }
+    const first = resolveSemanticTheme({
+      text: {
+        feedback: {
+          success: { base: "transparent" },
+          warning: { base: zeroAlpha },
+        },
+      },
+    })
+    expect(first.success).toBe(THEME_DEFAULTS.success)
+    expect(first.warning).toBe(THEME_DEFAULTS.warning)
+
+    const second = resolveSemanticTheme({
+      text: {
+        feedback: {
+          success: { base: zeroAlpha },
+          warning: { base: "TRANSPARENT" },
+        },
+      },
+    })
+    expect(second.success).toBe(THEME_DEFAULTS.success)
+    expect(second.warning).toBe(THEME_DEFAULTS.warning)
   })
 
   it("prefers the focused action tokens over selected and base (selected-row state)", () => {
@@ -312,6 +411,8 @@ describe("resolveSemanticTheme", () => {
       fg: "#ffffff",
       muted: "#888888",
       red: "#ef4444",
+      success: "#22c55e",
+      warning: "#eab308",
       primary: "#4f46e5",
       selectedText: "#ffffff",
       background: "#000000",

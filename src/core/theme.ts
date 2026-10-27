@@ -20,14 +20,35 @@ export interface ThemePalette {
   muted: ThemeColorValue
   /** Error/danger color. */
   red: ThemeColorValue
+  /**
+   * Success/positive feedback color (e.g. a completed operation).
+   *
+   * Optional on the base shape for source compatibility: it was added after
+   * the initial palette, so existing `ThemePalette` literals and
+   * `WlibHost<ThemePalette>` implementations must keep compiling. Both
+   * resolvers still populate it at runtime; {@link SemanticThemePalette}
+   * narrows it to required for v2 consumers.
+   */
+  success?: ThemeColorValue
+  /**
+   * Warning/caution feedback color.
+   *
+   * Optional on the base shape for source compatibility: it was added after
+   * the initial palette, so existing `ThemePalette` literals and
+   * `WlibHost<ThemePalette>` implementations must keep compiling. Both
+   * resolvers still populate it at runtime; {@link SemanticThemePalette}
+   * narrows it to required for v2 consumers.
+   */
+  warning?: ThemeColorValue
   /** Selection/active background color. */
   primary: ThemeColorValue
   /**
-   * Text color used on the selected list item. Optional in the legacy/v1
-   * shape: the v1 loose resolver (`resolveThemeColors`) may leave it
-   * `undefined`. The v2 semantic resolver (`resolveSemanticTheme`) always
-   * yields a visible value and returns {@link SemanticThemePalette}, whose
-   * `selectedText` is required.
+   * Text color used on the selected list item. Required in the legacy/v1
+   * shape, but its value may be `undefined` (`ThemeColorValue | undefined`):
+   * the v1 loose resolver (`resolveThemeColors`) may leave it `undefined`.
+   * The v2 semantic resolver (`resolveSemanticTheme`) always yields a visible
+   * value and returns {@link SemanticThemePalette}, where `selectedText` is
+   * required and always defined.
    */
   selectedText: ThemeColorValue | undefined
   /** Background color of the app/surface. */
@@ -38,10 +59,14 @@ export interface ThemePalette {
 
 /**
  * v2-specific resolved palette: every field of {@link ThemePalette}, but
- * `selectedText` is **required**. `resolveSemanticTheme` (v2) never yields
- * `undefined` for it — when every selection-text state is absent or
- * transparent it falls back to the resolved, visible `fg` — so v2 chip/label
- * consumers get non-optional, always-visible text without a `?? fallback`.
+ * `selectedText`, `success` and `warning` are **required**.
+ * `resolveSemanticTheme` (v2) never yields `undefined` for them —
+ * `selectedText` falls back to the resolved, visible `fg` and the feedback
+ * colors fall back to `THEME_DEFAULTS` — so v2 chip/label consumers get
+ * non-optional values without a `?? fallback`, while the base
+ * {@link ThemePalette} keeps `success`/`warning` optional and types
+ * `selectedText` as required but possibly `undefined` for backwards
+ * compatibility.
  *
  * Extends {@link ThemePalette}, so it is a drop-in wherever the legacy shape is
  * expected (e.g. `createV2Host` returns `WlibHost<SemanticThemePalette>`, which
@@ -50,12 +75,18 @@ export interface ThemePalette {
 export interface SemanticThemePalette extends ThemePalette {
   /** Text color used on the selected list item. Always defined and visible (v2). */
   selectedText: ThemeColorValue
+  /** Success/positive feedback color. Always defined (v2). */
+  success: ThemeColorValue
+  /** Warning/caution feedback color. Always defined (v2). */
+  warning: ThemeColorValue
 }
 
 export interface ThemePaletteFallbacks {
   fg?: ThemeColorValue
   muted?: ThemeColorValue
   red?: ThemeColorValue
+  success?: ThemeColorValue
+  warning?: ThemeColorValue
   primary?: ThemeColorValue
   background?: ThemeColorValue
   panel?: ThemeColorValue
@@ -66,6 +97,8 @@ export const THEME_DEFAULTS = {
   fg: "#ffffff",
   muted: "#888888",
   red: "#ef4444",
+  success: "#22c55e",
+  warning: "#eab308",
   primary: "#4f46e5",
   background: "#000000",
   panel: "#000000",
@@ -98,7 +131,11 @@ export interface SemanticThemeLike {
         readonly selected?: unknown
       }
     }
-    readonly feedback?: { readonly error?: { readonly base?: unknown } }
+    readonly feedback?: {
+      readonly error?: { readonly base?: unknown }
+      readonly success?: { readonly base?: unknown }
+      readonly warning?: { readonly base?: unknown }
+    }
   }
   readonly background?: {
     readonly base?: unknown
@@ -152,7 +189,13 @@ function visibleColor(v: unknown): ThemeColorValue | undefined {
 /**
  * Resolve a normalized palette from any theme-like object. Accepts both
  * property-name conventions (`text`/`foreground`, `textMuted`/`muted`,
- * `error`/`red`) and falls back to defaults.
+ * `error`/`red`) and falls back to defaults. The semantic feedback colors
+ * `success`/`warning` map from `theme.success`/`theme.warning`, then the
+ * caller's fallbacks, then `THEME_DEFAULTS`.
+ *
+ * `success`/`warning` are optional on the returned {@link ThemePalette} type
+ * only for source compatibility; this resolver always populates them at
+ * runtime (never `undefined`).
  */
 export function resolveThemeColors(
   theme: { [key: string]: unknown } | null | undefined,
@@ -162,6 +205,10 @@ export function resolveThemeColors(
     fg: validColor(theme?.text) ?? validColor(theme?.foreground) ?? fallbacks.fg ?? THEME_DEFAULTS.fg,
     muted: validColor(theme?.textMuted) ?? validColor(theme?.muted) ?? fallbacks.muted ?? THEME_DEFAULTS.muted,
     red: validColor(theme?.error) ?? validColor(theme?.red) ?? fallbacks.red ?? THEME_DEFAULTS.red,
+    success:
+      validColor(theme?.success) ?? fallbacks.success ?? THEME_DEFAULTS.success,
+    warning:
+      validColor(theme?.warning) ?? fallbacks.warning ?? THEME_DEFAULTS.warning,
     primary: validColor(theme?.primary) ?? fallbacks.primary ?? THEME_DEFAULTS.primary,
     selectedText: validColor(theme?.selectedListItemText),
     background: validColor(theme?.background) ?? fallbacks.background ?? THEME_DEFAULTS.background,
@@ -181,6 +228,10 @@ export function resolveThemeColors(
  *                   never inherit invisible text)
  * - `muted`       ← `text.muted`
  * - `red`         ← `text.feedback.error.base`
+ * - `success`     ← `text.feedback.success.base` (a transparent/zero-alpha token
+ *                   falls back to `THEME_DEFAULTS.success`)
+ * - `warning`     ← `text.feedback.warning.base` (same visible-color rule as
+ *                   `success`)
  * - `primary`     ← `background.action.primary.focused`, then `selected`,
  *                   then `.base` (selected-row background). The default v2
  *                   theme leaves `.base`/`selected` `transparent` and only
@@ -206,15 +257,19 @@ export function resolveThemeColors(
  * Transparent values (`"transparent"` or zero-alpha RGBA) are treated as absent
  * so a theme cannot paint an invisible surface or label: for the selection
  * background and app/panel surfaces a see-through value would render nothing,
- * and for `selectedText` it would render invisible text — so a transparent
- * selected-text token is *skipped* rather than preserved. Unlike v1, v2 then
- * lands on the resolved foreground instead of `undefined` so a chip can never
- * render invisible text; the resolved foreground is itself drawn only from a
- * visible `text.base` (a transparent one falls through to `THEME_DEFAULTS.fg`).
- * Non-transparent RGBA objects are preserved by identity.
+ * for `selectedText` it would render invisible text (so a transparent
+ * selected-text token is *skipped* rather than preserved), and for the semantic
+ * feedback tokens (`success`/`warning`) it would render invisible status text.
+ * A transparent feedback token therefore falls back to its `THEME_DEFAULTS`
+ * counterpart. Unlike v1, v2 then lands on the resolved foreground instead of
+ * `undefined` so a chip can never render invisible text; the resolved foreground
+ * is itself drawn only from a visible `text.base` (a transparent one falls
+ * through to `THEME_DEFAULTS.fg`). Non-transparent RGBA objects are preserved by
+ * identity.
  *
  * Returns the v2-specific {@link SemanticThemePalette} — the legacy
- * {@link ThemePalette} shape with `selectedText` narrowed to required.
+ * {@link ThemePalette} shape with `selectedText`, `success` and `warning`
+ * narrowed to required (this resolver always yields a value for all three).
  */
 export function resolveSemanticTheme(
   theme: SemanticThemeLike | null | undefined,
@@ -226,6 +281,10 @@ export function resolveSemanticTheme(
     fg,
     muted: validColor(theme?.text?.muted) ?? THEME_DEFAULTS.muted,
     red: validColor(theme?.text?.feedback?.error?.base) ?? THEME_DEFAULTS.red,
+    success:
+      visibleColor(theme?.text?.feedback?.success?.base) ?? THEME_DEFAULTS.success,
+    warning:
+      visibleColor(theme?.text?.feedback?.warning?.base) ?? THEME_DEFAULTS.warning,
     primary:
       visibleColor(actionBackground?.focused) ??
       visibleColor(actionBackground?.selected) ??

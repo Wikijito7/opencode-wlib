@@ -115,16 +115,20 @@ concept) and forwards every other layer field unchanged.
 ## Theme migration (v2 semantic tokens)
 
 `resolveSemanticTheme(theme)` maps the v2 `ResolvedTheme` onto the v2-specific
-`SemanticThemePalette` — the legacy `ThemePalette` with `selectedText` narrowed
-to **required** (always visible). `createV2Host` returns
-`WlibHost<SemanticThemePalette>`; the v1 adapter keeps the base `ThemePalette`
-and optional `selectedText`:
+`SemanticThemePalette` — the legacy `ThemePalette` with `selectedText`,
+`success` and `warning` narrowed to **required** (always defined).
+`createV2Host` returns `WlibHost<SemanticThemePalette>`; the v1 adapter keeps the
+base `ThemePalette`, where `selectedText` is a required property whose value may
+be `ThemeColorValue | undefined`, while `success` and `warning` are optional
+properties that may be omitted:
 
 | palette | v2 token |
 | --- | --- |
 | `fg` | `text.base` (visible; a transparent `text.base` → `THEME_DEFAULTS.fg`) |
 | `muted` | `text.muted` |
 | `red` | `text.feedback.error.base` |
+| `success` | `text.feedback.success.base` (visible; transparent → `THEME_DEFAULTS.success`) |
+| `warning` | `text.feedback.warning.base` (visible; transparent → `THEME_DEFAULTS.warning`) |
 | `primary` | `background.action.primary.focused` → `selected` → `.base` |
 | `selectedText` | `text.action.primary.focused` → `selected` → `.base` → `fg` |
 | `background` | `background.base` |
@@ -139,6 +143,27 @@ produced an invisible selected chip and `copied!` feedback.
 `.base` wins for 1:1 overlay-surface parity with the shipped v1 plugin scheme:
 the v1→v2 theme migrator maps legacy `backgroundPanel` to resolved
 `background.raised.base`, while `.high` is a lighter menu surface.
+
+**Semantic status colors.** `success` and `warning` are first-class palette
+fields so consumers stop abusing `primary`/`fg` for status text. The v2 resolver
+reads `text.feedback.success.base` / `text.feedback.warning.base` with the same
+visible-color validation used elsewhere (RGBA passed through by identity, never
+string-coerced; a transparent/zero-alpha token is skipped) and falls back to the
+stable defaults (`#22c55e` / `#eab308`, matching the v1 consumer behavior).
+The v1 loose resolver maps `theme.success`/`theme.warning`, then the caller's
+`ThemePaletteFallbacks`, then the same defaults.
+
+**Source compatibility.** On the base public `ThemePalette` (and therefore on
+`WlibHost<ThemePalette>` / `resolveThemeColors`) `success` and `warning` are
+**optional**. That keeps existing `ThemePalette` object literals and custom
+`WlibHost<ThemePalette>` implementations compiling without changes — they may
+omit the new fields. Both resolvers still return real values at runtime: the v1
+resolver always populates `success`/`warning` (never `undefined`), and the v2
+`SemanticThemePalette` refines both to **required** alongside required
+`selectedText`, because `resolveSemanticTheme` always produces them. Consume the
+v2 host (`WlibHost<SemanticThemePalette>`) or handle absence with
+`palette.success ?? THEME_DEFAULTS.success` when reading through the base
+`ThemePalette` type.
 
 **Raw vs resolved keys.** `context.theme` is an already-resolved `ResolvedTheme`,
 so its action-state keys drop the `$` sigil — `focused`, `selected`, `base`,
@@ -161,11 +186,16 @@ its legacy behavior and may still expose `undefined`. Non-transparent RGBA
 objects are passed through by identity — never string-coerced.
 
 **Type change.** `resolveSemanticTheme` now returns `SemanticThemePalette`
-(`selectedText: ThemeColorValue`, required) instead of `ThemePalette`
-(`selectedText?: ThemeColorValue`). Because `SemanticThemePalette extends
-ThemePalette`, existing assignments to `ThemePalette` keep working, and
+(`selectedText`/`success`/`warning`: `ThemeColorValue`, required) instead of
+`ThemePalette` (`selectedText` required but typed `ThemeColorValue | undefined`;
+`success`/`warning` optional properties). Because
+`SemanticThemePalette extends ThemePalette`, existing assignments to
+`ThemePalette` keep working, and
 `WlibHost<P extends ThemePalette = ThemePalette>` lets `createV2Host` expose the
 stronger type without breaking callers typed against the plain `WlibHost`.
+Keeping `success`/`warning` optional on the base type is deliberate: consumers
+that build a `ThemePalette` literal or implement `WlibHost<ThemePalette>` by hand
+are not forced to add the new fields.
 
 ## Coordinated consumer migration order
 

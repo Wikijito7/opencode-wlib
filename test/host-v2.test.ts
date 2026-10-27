@@ -487,7 +487,11 @@ describe("createV2Host", () => {
           text: {
             base: "#aaaaaa",
             muted: "#bbbbbb",
-            feedback: { error: { base: "#cc0000" } },
+            feedback: {
+              error: { base: "#cc0000" },
+              success: { base: "#00aa00" },
+              warning: { base: "#aa8800" },
+            },
             action: { primary: { focused: "#eeeeee", selected: "#dddddd", base: "#111111" } },
           },
           background: {
@@ -502,6 +506,8 @@ describe("createV2Host", () => {
         fg: "#aaaaaa",
         muted: "#bbbbbb",
         red: "#cc0000",
+        success: "#00aa00",
+        warning: "#aa8800",
         primary: "#5f56f6",
         selectedText: "#eeeeee",
         background: "#000000",
@@ -573,6 +579,8 @@ describe("createV2Host", () => {
       expect(palette.fg).toBe("#ffffff")
       expect(palette.muted).toBe("#888888")
       expect(palette.red).toBe("#ef4444")
+      expect(palette.success).toBe("#22c55e")
+      expect(palette.warning).toBe("#eab308")
       expect(palette.primary).toBe("#4f46e5")
       expect(palette.background).toBe("#000000")
       expect(palette.panel).toBe("#000000")

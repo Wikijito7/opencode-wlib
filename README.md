@@ -26,7 +26,7 @@ renderer helpers all take a `WlibHost`.
 | `keymapLayer(config)` | Dialog-scoped key layer → cleanup (v2 cleanup is a no-op; disposal is owned by the reactive computation). |
 | `dialog` | `show(render, onClose?)`, `set({ size, centered? })`, `clear()`. |
 | `renderer` | `read()` → `{ width, height }`; `subscribe(listener)` → unsubscribe. |
-| `theme()` | Semantic palette (`fg`, `muted`, `red`, `primary`, `selectedText`, `background`, `panel`); RGBA values preserved. Returns `SemanticThemePalette` (v2, `selectedText` required) or `ThemePalette` (v1, `selectedText` optional). |
+| `theme()` | Semantic palette (`fg`, `muted`, `red`, `success`, `warning`, `primary`, `selectedText`, `background`, `panel`); RGBA values preserved. Returns `SemanticThemePalette` (v2: `selectedText`/`success`/`warning` required and always defined) or `ThemePalette` (v1: `selectedText` is a required property whose value may be `ThemeColorValue | undefined`; `success`/`warning` are optional properties). |
 
 `WlibHost` is generic over the palette its `theme()` resolves —
 `WlibHost<P extends ThemePalette = ThemePalette>`. `createV2Host` returns
@@ -115,14 +115,20 @@ a layer to one mode; the v1 adapter ignores it (v1 has no mode concept).
 ### `theme` — normalized theme palette
 
 Two resolvers feed the palette, so dialogs stop drifting. They share
-`ThemePalette` (whose `selectedText` is optional); the v2 resolver returns the
-narrower `SemanticThemePalette` (which extends `ThemePalette` with a **required**
-`selectedText`):
+`ThemePalette`, where `selectedText` is a **required property whose value may be
+`undefined`** (`ThemeColorValue | undefined`), whereas `success`/`warning` are
+**optional properties** that may be omitted entirely; the
+v2 resolver returns the narrower `SemanticThemePalette` (which extends
+`ThemePalette` with **required, always-defined** `selectedText`, `success` and
+`warning`).
+`success`/`warning` are optional on the base type purely for source
+compatibility — existing `ThemePalette` literals and `WlibHost<ThemePalette>`
+implementations keep compiling — but both resolvers populate them at runtime:
 
-- `resolveSemanticTheme(theme)` — **v2** → `SemanticThemePalette`: maps the resolved `ResolvedTheme` (`context.theme`) semantic tokens (`text.base`, `text.muted`, `text.feedback.error.base`, `background.action.primary.focused`/`selected`/`.base`, `text.action.primary.focused`/`selected`/`.base`, `background.base`, `background.raised.base`/`.high`). Resolved action states carry **no `$` sigil** — `focused`/`selected` here are the *resolved* keys, whereas the raw theme definitions a plugin authors spell them `$focused`/`$selected` (the host's resolver strips the `$`). Selection tokens resolve from the **focused** state first (then `selected`, then `base`) because the default v2 theme leaves the base/selected surface `transparent` and only paints the accent on focus. `panel` maps to `background.raised.base` first (then `.high`), matching the consumer's v1 plugin scheme 1:1 — the v1→v2 theme migrator maps legacy `backgroundPanel` to resolved `background.raised.base`, whereas `.high` is a lighter menu surface. Transparent values (`"transparent"` or zero-alpha RGBA) are treated as absent for surfaces *and* for `selectedText` (zero-alpha text would be invisible). Because v2 chip/label consumers always need visible text, `selectedText` never resolves to `undefined`: when every selection text state is absent or transparent it falls back to the resolved `fg`, so the text is always readable. That `fg` fallback is itself guaranteed visible — a transparent `text.base` is skipped and resolved to `THEME_DEFAULTS.fg`, so the fallback can never inherit invisible text. RGBA values otherwise pass through untouched.
-- `resolveThemeColors(theme, fallbacks?)` — **v1 / loose** → `ThemePalette`: normalizes drifting property names (`text`/`foreground`, `textMuted`/`muted`, `error`/`red`). Its `selectedText` may still be `undefined` — only `resolveSemanticTheme` guarantees a visible fallback.
+- `resolveSemanticTheme(theme)` — **v2** → `SemanticThemePalette`: maps the resolved `ResolvedTheme` (`context.theme`) semantic tokens (`text.base`, `text.muted`, `text.feedback.error.base`, `text.feedback.success.base`, `text.feedback.warning.base`, `background.action.primary.focused`/`selected`/`.base`, `text.action.primary.focused`/`selected`/`.base`, `background.base`, `background.raised.base`/`.high`). Resolved action states carry **no `$` sigil** — `focused`/`selected` here are the *resolved* keys, whereas the raw theme definitions a plugin authors spell them `$focused`/`$selected` (the host's resolver strips the `$`). Selection tokens resolve from the **focused** state first (then `selected`, then `base`) because the default v2 theme leaves the base/selected surface `transparent` and only paints the accent on focus. `panel` maps to `background.raised.base` first (then `.high`), matching the consumer's v1 plugin scheme 1:1 — the v1→v2 theme migrator maps legacy `backgroundPanel` to resolved `background.raised.base`, whereas `.high` is a lighter menu surface. `success`/`warning` map from their `text.feedback.*.base` tokens using visible-color validation (a transparent/zero-alpha token is skipped), falling back to the semantic defaults `#22c55e`/`#eab308`. Transparent values (`"transparent"` or zero-alpha RGBA) are treated as absent for surfaces *and* for `selectedText` (zero-alpha text would be invisible). Because v2 chip/label consumers always need visible text, `selectedText` never resolves to `undefined`: when every selection text state is absent or transparent it falls back to the resolved `fg`, so the text is always readable. That `fg` fallback is itself guaranteed visible — a transparent `text.base` is skipped and resolved to `THEME_DEFAULTS.fg`, so the fallback can never inherit invisible text. RGBA values otherwise pass through untouched.
+- `resolveThemeColors(theme, fallbacks?)` — **v1 / loose** → `ThemePalette`: normalizes drifting property names (`text`/`foreground`, `textMuted`/`muted`, `error`/`red`) and maps `theme.success`/`theme.warning` (then caller fallbacks, then the semantic defaults). Its `selectedText` property is still required, but its value may be `undefined` — only `resolveSemanticTheme` guarantees a visible fallback.
 
-**API:** `resolveSemanticTheme(theme)` → `SemanticThemePalette` / `resolveThemeColors(theme, fallbacks?)` → `ThemePalette`: `{ fg, muted, red, primary, selectedText, background, panel }`.
+**API:** `resolveSemanticTheme(theme)` → `SemanticThemePalette` / `resolveThemeColors(theme, fallbacks?)` → `ThemePalette`: `{ fg, muted, red, success, warning, primary, selectedText, background, panel }`.
 
 ### `log` — unified debug logging
 

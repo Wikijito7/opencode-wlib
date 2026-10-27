@@ -180,6 +180,8 @@ function makeHost(): FakeHost & { host: unknown } {
       fg: "#ffffff",
       muted: "#888888",
       red: "#ef4444",
+      success: "#22c55e",
+      warning: "#eab308",
       primary: "#4f46e5",
       background: "#000000",
       panel: "#101010",
