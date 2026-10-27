@@ -1,3 +1,217 @@
+# Migration guide: OpenCode v1 → v2 host API
+
+wlib now targets **OpenCode 2.0.27** (local reference:
+`/Users/cristianpc/.local/share/opencode/repos/github.com/anomalyco/opencode`,
+`package.json` → `"version": "2.0.27"`). The v1 plugin API
+(`@opencode-ai/plugin/tui`) is **not supported by v2**; a plugin must be ported.
+
+The library no longer takes the raw host API in its command/keymap, dialog,
+theme, or export-controller helpers. It takes a **`WlibHost` adapter** instead:
+
+| Generation | Factory | Import | Status |
+| --- | --- | --- | --- |
+| v2 | `createV2Host(context)` | `./wlib/src/host/v2` | **Supported (production)** |
+| v1 | `createV1Host(api)` | `./wlib/src/host/v1` | **Deprecated** — transition only |
+
+**Policy:** pick exactly one factory. Never mix `createV1Host` and
+`createV2Host` in the same runtime adapter. The v1 adapter is removed in
+opencode-wlib#5.
+
+## Function signature migration
+
+```ts
+// before (v1: raw TuiPluginApi)
+registerSlashCommand(api, opts)
+registerDialogKeyLayer(api, config)
+resolveThemeColors(api.theme.current)
+useDialogSizing(api, desired)
+createExportController(api, exportable, opts)
+// <DialogShell api={api} … />
+
+// after (v2: build the adapter once, then pass it)
+import { createV2Host } from "./wlib/src/host/v2"
+const host = createV2Host(context)
+
+registerSlashCommand(host, opts)
+registerDialogKeyLayer(host, config)
+host.theme()                        // or resolveSemanticTheme(context.theme)
+useDialogSizing(host, desired)
+createExportController(host, exportable, opts)
+// <DialogShell host={host} … />
+```
+
+`DialogShell` now applies the resolved width tier itself
+(`host.dialog.set({ size })`); `onSizeChange` is an optional notification hook,
+not the mechanism that keeps the host in sync.
+
+## Export-controller lifetime (v2)
+
+The export controller registers a `createEffect` (its priority-2 key layer) and
+an `onCleanup` (the flash timeout), so it needs a **stable Solid owner**. A
+dialog's render callback re-runs on every signal read in its body, so creating
+the controller inside the callback replaces it on each re-run — dropping the old
+controller's key layer and rendering the overlay against a fresh, closed
+instance. Wrap the controller in `createOwnedInstance` (constructed anywhere,
+e.g. from the keymap command) and **call `.get()` from inside the render
+callback**; dispose that owner from the dialog's `onClose`:
+
+```ts
+import { createOwnedInstance } from "./wlib/src/ui/owned-instance"
+import { createExportController, type ExportController } from "./wlib/src/ui/export-controller"
+
+const exporterOwner = createOwnedInstance(() =>
+  createExportController(host, exportable, { name: "usage" }),
+)
+let exporter: ExportController
+
+host.dialog.show(() => {
+  exporter = exporterOwner.get()   // stable across render re-runs
+  // …render…
+}, () => exporterOwner.dispose())
+```
+
+`get()` must run **inside** the render callback, not before it: it is what
+creates the standalone `createRoot` owner, and the root inherits the context of
+its call site. The export controller's `createEffect` reads
+`context.keymap.layer`, which the dialog only provides inside its render
+(`Keymap.Provider`); a root created before `host.dialog.show` captures an owner
+above the provider, the effect logs `Keymap.Provider is missing`, and the
+priority-2 layer never registers. Because the root is standalone, the transient
+render computation cannot dispose it; only the returned `dispose()` tears it
+down (exactly once, idempotently).
+
+The helper is imported from `./wlib/src/ui/owned-instance` and ships as
+`owned-instance.tsx`: a Solid-dependent module is `.tsx` so the OpenCode 2.0.27
+runtime transform processes it (the runtime applies its Solid pass only to JSX
+modules; a `.ts` file receives only the TypeScript pass).
+
+## Command field mapping (v1 → v2)
+
+The host adapter performs this mapping, but the shape is worth knowing:
+
+| wlib / v1 | v2 |
+| --- | --- |
+| command `name` | command `id` |
+| command `category` | command `group` |
+| `namespace: "palette"` | `palette: true` |
+| `slashName` | `slash: { name, aliases? }` |
+| inline binding `{ key, cmd, desc }` | `bind` on the command (+ `bindings` ID list for named commands) |
+| `keymap.registerLayer()` (returns cleanup) | `keymap.layer(factory)` (disposal owned by the reactive computation; wlib cleanup is a no-op) |
+| `enter` key name | `return` key name |
+
+## Keymap mode (v2-only)
+
+wlib plugin-global and dialog key layers are registered with **`mode: "global"`**
+on v2. OpenCode 2.0.27 defaults an omitted keymap mode to `base` and switches the
+active mode to `modal` whenever a dialog is open, so a layer left at the default
+is *inactive in modal/composer states* — its palette/slash entry and key bindings
+stop firing exactly when the dialog is visible. `registerSlashCommand` and
+`registerDialogKeyLayer` set `global` for you; pass `mode` explicitly to scope a
+layer to a single mode.
+
+`mode` is a v2-only field. The v1 adapter ignores it (v1 has no keymap-mode
+concept) and forwards every other layer field unchanged.
+
+## Theme migration (v2 semantic tokens)
+
+`resolveSemanticTheme(theme)` maps the v2 `ResolvedTheme` onto the v2-specific
+`SemanticThemePalette` — the legacy `ThemePalette` with `selectedText`,
+`success` and `warning` narrowed to **required** (always defined).
+`createV2Host` returns `WlibHost<SemanticThemePalette>`; the v1 adapter keeps the
+base `ThemePalette`, where `selectedText` is a required property whose value may
+be `ThemeColorValue | undefined`, while `success` and `warning` are optional
+properties that may be omitted:
+
+| palette | v2 token |
+| --- | --- |
+| `fg` | `text.base` (visible; a transparent `text.base` → `THEME_DEFAULTS.fg`) |
+| `muted` | `text.muted` |
+| `red` | `text.feedback.error.base` |
+| `success` | `text.feedback.success.base` (visible; transparent → `THEME_DEFAULTS.success`) |
+| `warning` | `text.feedback.warning.base` (visible; transparent → `THEME_DEFAULTS.warning`) |
+| `primary` | `background.action.primary.focused` → `selected` → `.base` |
+| `selectedText` | `text.action.primary.focused` → `selected` → `.base` → `fg` |
+| `background` | `background.base` |
+| `panel` | `background.raised.base` → `background.raised.high` |
+
+Selection resolves from the **focused** state first: the default v2 theme
+leaves `background.action.primary.base` and `.selected` `transparent` and only
+paints the visible accent on `.focused`, so reading `.base` (the old mapping)
+produced an invisible selected chip and `copied!` feedback.
+
+`panel` resolves from `background.raised.base` first, then `background.raised.high`.
+`.base` wins for 1:1 overlay-surface parity with the shipped v1 plugin scheme:
+the v1→v2 theme migrator maps legacy `backgroundPanel` to resolved
+`background.raised.base`, while `.high` is a lighter menu surface.
+
+**Semantic status colors.** `success` and `warning` are first-class palette
+fields so consumers stop abusing `primary`/`fg` for status text. The v2 resolver
+reads `text.feedback.success.base` / `text.feedback.warning.base` with the same
+visible-color validation used elsewhere (RGBA passed through by identity, never
+string-coerced; a transparent/zero-alpha token is skipped) and falls back to the
+stable defaults (`#22c55e` / `#eab308`, matching the v1 consumer behavior).
+The v1 loose resolver maps `theme.success`/`theme.warning`, then the caller's
+`ThemePaletteFallbacks`, then the same defaults.
+
+**Source compatibility.** On the base public `ThemePalette` (and therefore on
+`WlibHost<ThemePalette>` / `resolveThemeColors`) `success` and `warning` are
+**optional**. That keeps existing `ThemePalette` object literals and custom
+`WlibHost<ThemePalette>` implementations compiling without changes — they may
+omit the new fields. Both resolvers still return real values at runtime: the v1
+resolver always populates `success`/`warning` (never `undefined`), and the v2
+`SemanticThemePalette` refines both to **required** alongside required
+`selectedText`, because `resolveSemanticTheme` always produces them. Consume the
+v2 host (`WlibHost<SemanticThemePalette>`) or handle absence with
+`palette.success ?? THEME_DEFAULTS.success` when reading through the base
+`ThemePalette` type.
+
+**Raw vs resolved keys.** `context.theme` is an already-resolved `ResolvedTheme`,
+so its action-state keys drop the `$` sigil — `focused`, `selected`, `base`,
+`hovered`, `pressed`, `disabled` (the host's resolver strips it via
+`resolvedKey`). The `$focused`/`$selected` spelling exists only in the *raw*
+theme definitions a plugin authors, never in the resolved context. A resolver
+must read `.focused`/`.selected` from `context.theme`.
+
+A value of `"transparent"` (or a zero-alpha RGBA) is treated as **absent** for
+surface tokens, so the resolver falls through to `selected`, `base`, and finally
+the legacy `THEME_DEFAULTS` instead of painting nothing. The same rule applies
+to `selectedText`: a transparent selected-text token is *skipped* because
+zero-alpha text would be invisible. Unlike v1, the v2 resolver does **not** end
+at `undefined` — v2 chip and label consumers require visible text, so when all
+selection text states are absent or transparent `selectedText` falls back to the
+resolved `fg`. That `fg` fallback is itself visible: a transparent/zero-alpha
+`text.base` is skipped and resolves to `THEME_DEFAULTS.fg`, so the fallback can
+never inherit invisible text. The v1 loose resolver (`resolveThemeColors`) keeps
+its legacy behavior and may still expose `undefined`. Non-transparent RGBA
+objects are passed through by identity — never string-coerced.
+
+**Type change.** `resolveSemanticTheme` now returns `SemanticThemePalette`
+(`selectedText`/`success`/`warning`: `ThemeColorValue`, required) instead of
+`ThemePalette` (`selectedText` required but typed `ThemeColorValue | undefined`;
+`success`/`warning` optional properties). Because
+`SemanticThemePalette extends ThemePalette`, existing assignments to
+`ThemePalette` keep working, and
+`WlibHost<P extends ThemePalette = ThemePalette>` lets `createV2Host` expose the
+stronger type without breaking callers typed against the plain `WlibHost`.
+Keeping `success`/`warning` optional on the base type is deliberate: consumers
+that build a `ThemePalette` literal or implement `WlibHost<ThemePalette>` by hand
+are not forced to add the new fields.
+
+## Coordinated consumer migration order
+
+wlib lands first; consumers bump their submodule only **after** the v2 wlib
+tests pass.
+
+1. **opencode-wlib** (this repo) — shared v2 contract.
+2. **opencode-persona-injector** (#34) — server hooks + TUI + system-snapshot writer.
+3. **opencode-model-usage** (#47) — server hooks, data layer, TUI dialogs, snapshot reader.
+4. **notifications** — scope/ownership TBD.
+
+Each consumer keeps its deprecated v1 entrypoints during the transition window
+and removes them in the follow-up cleanup issues (#35, #50; wlib #5).
+
+---
+
 # Migration guide: flat layout → `src/core` + `src/ui`
 
 This document explains how to migrate a plugin that consumes `opencode-wlib` as a
@@ -16,10 +230,44 @@ paths.
 
 ## Steps
 
-1. **Update the submodule**
+1. **Update the submodule to the approved v2 commit (do not use
+   `--remote`)**
+
+   `git submodule update --remote` tracks whatever upstream branch the
+   submodule's `branch` config (or `origin/HEAD`) points at, which may be the
+   default branch rather than the reviewed `v2` line — it can silently land you
+   on the wrong tip. Pin the exact reviewed commit instead.
+
+   The commit below must be the **approved v2 commit** (the reviewed commit that
+   contains `src/`), never an implicit `origin/HEAD` or default-branch tip. The
+   submodule directory depends on where the consumer mounted it — it is often
+   nested (e.g. `packages/foo/wlib`), so set `WLIB_PATH` to the path as it
+   actually exists in this consumer repo and use it throughout. Fetch the branch
+   with an explicit refspec so `origin/v2` resolves unambiguously, inspect it,
+   and check out that commit detached:
+
    ```bash
-   git submodule update --remote --merge
-   git commit -m "chore: bump opencode-wlib (src/ layout)"
+   # from the consumer repo root
+   WLIB_PATH="wlib"                              # actual submodule path in this repo (often nested)
+   APPROVED_V2_SHA="REPLACE_WITH_REVIEWED_V2_SHA" # full SHA of the reviewed v2 commit
+
+   git submodule update --init "$WLIB_PATH"                          # ensure it's present
+   git -C "$WLIB_PATH" fetch origin refs/heads/v2:refs/remotes/origin/v2
+   #   ^ explicit refspec so `origin/v2` is unambiguous
+   git -C "$WLIB_PATH" log --oneline origin/v2 -- src/              # inspect: which commits contain src/
+   git -C "$WLIB_PATH" checkout "$APPROVED_V2_SHA"                  # checkout the exact v2 commit, detached
+   git -C "$WLIB_PATH" rev-parse HEAD                               # confirm HEAD == "$APPROVED_V2_SHA"
+   git -C "$WLIB_PATH" log -1 --stat                                # confirm the src/ layout is present
+   ```
+
+   Set `APPROVED_V2_SHA` to the full SHA of the reviewed v2 commit — do not
+   substitute `origin/v2`, `origin/HEAD`, or a default-branch tip, and do not
+   merge; a detached checkout of the exact commit is what keeps the consumer
+   reproducible. Then stage the submodule pointer and commit the consumer change:
+
+   ```bash
+   git add "$WLIB_PATH"
+   git commit -m "chore: pin opencode-wlib to approved v2 src/ layout ($APPROVED_V2_SHA)"
    ```
 
 2. **Rewrite imports** using the mapping below. A single `find`/`sed` (or your
@@ -46,7 +294,9 @@ paths.
 | `./wlib/export` | `./wlib/src/core/export` |
 | `./wlib/export-state` | `./wlib/src/core/export-state` |
 | `./wlib/help` | `./wlib/src/core/help` |
+| `./wlib/instance` | `./wlib/src/core/instance` |
 | `./wlib/dialog` | `./wlib/src/ui/dialog` |
+| `./wlib/owned-instance` | `./wlib/src/ui/owned-instance` |
 | `./wlib/copied-flash` | `./wlib/src/ui/copied-flash` |
 | `./wlib/export-controller` | `./wlib/src/ui/export-controller` |
 | `./wlib/export-overlay` | `./wlib/src/ui/export-overlay` |

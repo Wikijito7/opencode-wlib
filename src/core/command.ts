@@ -1,13 +1,13 @@
 /**
  * opencode-wlib — palette slash command registration.
  *
- * Every plugin registers the same shape: a `keymap.registerLayer` with a
- * palette command (`category: "Plugin"`, `namespace: "palette"`,
- * `slashName`) plus an optional key binding. This helper builds it and
- * returns the cleanup function.
+ * Every plugin registers the same shape: a palette command
+ * (`category: "Plugin"` / `group: "Plugin"`, slash completion) plus an
+ * optional key binding. This helper forwards that shape to the host adapter,
+ * which maps it onto the active host's keymap API.
  */
 
-import type { TuiPluginApi } from "@opencode-ai/plugin/tui"
+import type { WlibHost } from "../host/types"
 
 export interface SlashCommandOptions {
   /** Command id, e.g. "analyze.show". */
@@ -23,30 +23,19 @@ export interface SlashCommandOptions {
 }
 
 /**
- * Register a palette slash command (+ optional key binding) on the TUI API.
- * Returns a cleanup function.
+ * Register a palette slash command (+ optional key binding) through the host
+ * adapter. Returns a cleanup function.
  */
 export function registerSlashCommand(
-  api: TuiPluginApi,
+  host: WlibHost,
   opts: SlashCommandOptions,
 ): () => void {
-  const keySpec = typeof opts.key === "string"
-    ? { key: opts.key, desc: opts.title }
-    : opts.key
-
-  return api.keymap.registerLayer({
-    commands: [
-      {
-        name: opts.name,
-        title: opts.title,
-        category: "Plugin",
-        namespace: "palette",
-        slashName: opts.slashName,
-        run: opts.run,
-      },
-    ],
-    bindings: keySpec
-      ? [{ key: keySpec.key, cmd: opts.name, desc: keySpec.desc }]
-      : [],
+  return host.registerCommand({
+    name: opts.name,
+    title: opts.title,
+    slashName: opts.slashName,
+    group: "Plugin",
+    key: opts.key,
+    run: opts.run,
   })
 }
